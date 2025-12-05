@@ -1,0 +1,110 @@
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    font-family: 'Segoe UI', sans-serif;
+    background: #111;
+    color: #f8f8f8;
+}
+
+#app-container {
+    display: grid;
+    grid-template-columns: 280px 1fr;
+    grid-template-rows: 1fr 140px;
+    height: 100vh;
+    overflow: hidden;
+}
+
+#grid-canvas {
+    grid-column: 2 / 3;
+    grid-row: 1 / 2;
+    display: block;
+    background: #000;
+    width: 100%;
+    height: 100%;
+}
+
+#sidebar {
+    padding: 16px;
+    border-right: 1px solid #2c2c2c;
+    background: linear-gradient(180deg, #1a1a1a 0%, #0f0f0f 100%);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+#sidebar h1 {
+    margin: 0;
+    font-size: 20px;
+}
+
+#sidebar p {
+    margin: 0;
+    color: #b5b5b5;
+    font-size: 14px;
+}
+
+.sidebar__buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+#sidebar button {
+    padding: 10px 12px;
+    border: 1px solid #2f2f2f;
+    background: #1f1f1f;
+    color: #f8f8f8;
+    border-radius: 6px;
+    cursor: pointer;
+    text-align: left;
+    transition: border-color 0.2s, background 0.2s;
+}
+
+#sidebar button:hover {
+    border-color: #ffcc00;
+}
+
+#sidebar button.active {
+    background: #2a2100;
+    border-color: #ffcc00;
+    color: #ffd34f;
+}
+
+#sidebar button.ghost {
+    background: transparent;
+    border-color: #3a3a3a;
+}
+
+#sidebar small {
+    color: #8f8f8f;
+}
+
+#log-console {
+    grid-column: 1 / 3;
+    grid-row: 2 / 3;
+    height: 140px;
+    background: #0c0c0c;
+    border-top: 1px solid #222;
+    display: flex;
+    flex-direction: column;
+}
+
+.log-console__header {
+    padding: 8px 12px;
+    background: #161616;
+    border-bottom: 1px solid #222;
+    font-weight: bold;
+    letter-spacing: 0.4px;
+}
+
+.log-console__body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px 12px;
+    font-family: monospace;
+    font-size: 13px;
+    color: #dcdcdc;
+}
