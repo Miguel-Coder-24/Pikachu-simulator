@@ -1,0 +1,976 @@
+--- INICIO DEL PROYECTO ---
+
+
+========================================
+FILE: index.html
+========================================
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pikachu Simulator</title>
+    <link rel="stylesheet" href="./styles/main.css">
+</head>
+<body>
+    <header>
+        <div>
+            <h1>Simulador de Red Nacional (Escala Grande)</h1>
+            <div class="subtitle">Topología mallada dinámica</div>
+        </div>
+        <div id="clock">T = 0.0s</div>
+    </header>
+
+    <div id="main-container">
+        <div id="canvas-container">
+            <canvas id="grid-canvas"></canvas>
+            <div id="status-overlay">
+                Sistema estable<br>
+                Zoom automático.<br>
+                Arrastra nodos para reorganizar.
+            </div>
+        </div>
+
+        <aside id="sidebar">
+            <div class="panel">
+                <h3>Controles Globales</h3>
+                <button id="btn-peak" class="primary">⚡ Pico Nacional (+20%)</button>
+                <button id="btn-trip" class="danger">🎲 Falla Aleatoria de Línea</button>
+                <button id="btn-reset">🔄 Regenerar Topología</button>
+            </div>
+
+            <div class="panel">
+                <h3>Métricas en Tiempo Real</h3>
+                <div id="system-metrics" class="metrics">Calculando...</div>
+            </div>
+
+            <div class="panel">
+                <h3>Top 5 Líneas Críticas</h3>
+                <div id="lines-status"></div>
+            </div>
+
+            <div class="panel panel-console">
+                <h3>Registro de Eventos</h3>
+                <div id="log-console"></div>
+            </div>
+        </aside>
+    </div>
+
+    <script type="module" src="./src/main.js"></script>
+</body>
+</html>
+
+
+
+========================================
+FILE: src/config.js
+========================================
+export const CONFIG = {
+    // Metadatos
+    VERSION: '0.2.0 (High Voltage)',
+    SEED_SAMPLE: true,
+
+    // Configuración visual
+    GRID_SIZE: 40,
+    BACKGROUND_COLOR: '#0a0a0f', // Negro azulado muy oscuro
+    GRID_LINE_COLOR: '#1a1a25',
+    
+    COLORS: {
+        // Amarillo Eléctrico para Generadores (Pikachu Style)
+        SOURCE: '#FFD700', 
+        SOURCE_GLOW: '#FFC107',
+        
+        // Azul Cian Neón para las Cargas (Ciudades)
+        LOAD: '#00E5FF',
+        LOAD_GLOW: '#00B8D4',
+        
+        // Colores de cables
+        LINE_OFF: '#2c2c3a',
+        LINE_NORMAL: '#FFD700', // El cable toma el color de la energía
+        LINE_CRITICAL: '#FF3D00', // Rojo anaranjado brillante
+        
+        GRID_ACCENT: '#233042'
+    },
+
+    UI: {
+        SIDEBAR_WIDTH: 320,
+        CONSOLE_HEIGHT: 200
+    },
+
+    // Configuración del sistema
+    DEBUG_MODE: true
+};
+
+
+========================================
+FILE: src/core/GameLoop.js
+========================================
+export class GameLoop {
+    constructor(updateCallback) {
+        this.updateCallback = updateCallback;
+        this.lastTime = 0;
+        this.isRunning = false;
+        this.frameId = null;
+    }
+
+    start() {
+        if (this.isRunning) return;
+        this.isRunning = true;
+        this.lastTime = performance.now();
+        this.loop(this.lastTime);
+    }
+
+    stop() {
+        this.isRunning = false;
+        if (this.frameId) cancelAnimationFrame(this.frameId);
+    }
+
+    loop(currentTime) {
+        if (!this.isRunning) return;
+
+        // Calcular delta (tiempo que pasó desde el último frame)
+        const deltaTime = (currentTime - this.lastTime) / 1000; // en segundos
+        this.lastTime = currentTime;
+
+        // Ejecutar la lógica del juego
+        this.updateCallback(deltaTime);
+
+        // Pedir el siguiente frame
+        this.frameId = requestAnimationFrame((t) => this.loop(t));
+    }
+}
+
+
+========================================
+FILE: src/core/PowerGridSimulation.js
+========================================
+import { PowerNode } from './PowerNode.js';
+import { TransmissionLine } from './TransmissionLine.js';
+import { CONFIG } from '../config.js';
+
+export class PowerGridSimulation {
+    constructor(renderer, logger, ui) {
+        this.renderer = renderer;
+        this.logger = logger;
+        this.ui = ui;
+
+        this.nodes = [];
+        this.lines = [];
+        this.currentTime = 0;
+        this.timeStep = 0.05;
+        this.accumulator = 0;
+        this.lastTime = performance.now();
+
+        this.dragNode = null;
+
+        this.cityNames = [
+            'Bogotá', 'Medellín', 'Cali', 'Barranquilla', 'Cartagena',
+            'Cúcuta', 'Bucaramanga', 'Pereira', 'Santa Marta', 'Ibagué',
+            'Pasto', 'Manizales', 'Neiva', 'Villavicencio', 'Armenia'
+        ];
+        this.plantNames = [
+            'Hidroituango', 'Guavio', 'San Carlos', 'Chivor', 'Guatapé',
+            'Termozipa', 'Termosierra', 'Sogamoso', 'Porce III', 'Betania'
+        ];
+    }
+
+    resetGrid(canvasWidth, canvasHeight) {
+        this.currentTime = 0;
+        this.nodes = [];
+        this.lines = [];
+        this.accumulator = 0;
+
+        this.logger.log('Generando nueva topología nacional...', 'info');
+
+        const w = canvasWidth || 800;
+        const h = canvasHeight || 600;
+        const margin = 50;
+
+        // Generadores
+        for (let i = 0; i < 10; i++) {
+            const name = this.plantNames[i % this.plantNames.length];
+            const x = margin + Math.random() * (w - 2 * margin);
+            const y = margin + Math.random() * (h - 2 * margin);
+            const node = new PowerNode(`G${i + 1}`, name, 'gen', x, y);
+            node.pGen = 150 + Math.random() * 200;
+            this.nodes.push(node);
+        }
+
+        // Ciudades
+        for (let i = 0; i < 15; i++) {
+            const name = this.cityNames[i % this.cityNames.length];
+            let x, y, safe;
+            let attempts = 0;
+            do {
+                safe = true;
+                x = margin + Math.random() * (w - 2 * margin);
+                y = margin + Math.random() * (h - 2 * margin);
+                for (const n of this.nodes) {
+                    const d = Math.hypot(n.x - x, n.y - y);
+                    if (d < 50) safe = false;
+                }
+                attempts++;
+            } while (!safe && attempts < 50);
+
+            const node = new PowerNode(`C${i + 1}`, name, 'load', x, y);
+            node.pLoad = 80 + Math.random() * 120;
+            this.nodes.push(node);
+        }
+
+        // Conectar nodos
+        this.nodes.forEach((nodeA) => {
+            const distances = this.nodes
+                .filter(nodeB => nodeA !== nodeB)
+                .map(nodeB => ({
+                    node: nodeB,
+                    dist: Math.hypot(nodeA.x - nodeB.x, nodeA.y - nodeB.y)
+                }))
+                .sort((a, b) => a.dist - b.dist);
+
+            const connections = 2 + (Math.random() > 0.8 ? 1 : 0);
+
+            for (let i = 0; i < Math.min(connections, distances.length); i++) {
+                const neighbor = distances[i].node;
+                const exists = this.lines.find(l =>
+                    (l.from === nodeA && l.to === neighbor) ||
+                    (l.from === neighbor && l.to === nodeA)
+                );
+                if (!exists) {
+                    const id = `L-${this.lines.length + 1}`;
+                    this.lines.push(new TransmissionLine(id, nodeA, neighbor));
+                }
+            }
+        });
+
+        this.logger.log(`Sistema listo: ${this.nodes.length} nodos activos.`, 'info');
+        this.solvePowerFlow();
+        this.updateUI();
+    }
+
+    solvePowerFlow() {
+        let totalLoad = 0;
+        let totalGenCapacity = 0;
+
+        this.nodes.forEach(n => {
+            if (n.type === 'load') totalLoad += n.pLoad;
+            if (n.type === 'gen') totalGenCapacity += n.pGen;
+        });
+
+        const systemStress = Math.min(1.5, totalLoad / Math.max(1, totalGenCapacity));
+
+        this.nodes.forEach(n => {
+            if (n.type === 'gen') {
+                n.currentGen = n.pGen * systemStress;
+                n.netPower = n.currentGen;
+            } else {
+                n.netPower = -n.pLoad;
+            }
+            n.vVirtual = 1.0 + (n.netPower / 2000);
+        });
+
+        this.lines.forEach(line => {
+            if (!line.status) {
+                line.currentLoadMva = 0;
+                return;
+            }
+            const vDiff = line.from.vVirtual - line.to.vVirtual;
+            const flow = (vDiff / line.impedance) * 10;
+            const loadPull = line.to.type === 'load' ? line.to.pLoad : 0;
+            line.currentLoadMva = Math.abs(flow) + (loadPull * 0.4);
+        });
+
+        this.updateUI(totalLoad, totalGenCapacity, systemStress);
+    }
+
+    triggerPeakLoad() {
+        this.nodes.forEach(n => {
+            if (n.type === 'load') {
+                n.pLoad *= 1.2;
+                n.radius += 3;
+            }
+        });
+        this.logger.log('ALERTA: Pico de demanda (+20%)', 'warn');
+        setTimeout(() => {
+            this.nodes.filter(n => n.type === 'load').forEach(n => n.radius -= 3);
+            this.solvePowerFlow();
+        }, 300);
+    }
+
+    tripRandomLine() {
+        const active = this.lines.filter(l => l.status);
+        if (!active.length) return;
+        const randomLine = active[Math.floor(Math.random() * active.length)];
+        randomLine.status = false;
+        this.logger.log(`FALLA: Línea ${randomLine.id} fuera de servicio.`, 'error');
+        this.solvePowerFlow();
+    }
+
+    update(deltaTime) {
+        this.accumulator += deltaTime;
+        while (this.accumulator >= this.timeStep) {
+            this.currentTime += this.timeStep;
+            this.solvePowerFlow();
+
+            let trippedCount = 0;
+            this.lines.forEach(line => {
+                const tripped = line.updateThermal(this.timeStep);
+                if (tripped && line.status) {
+                    line.status = false;
+                    trippedCount++;
+                    this.logger.log(`PROTECCIÓN: ${line.id} disparo térmico!`, 'error');
+                }
+            });
+
+            this.updateUI();
+            this.accumulator -= this.timeStep;
+        }
+    }
+
+    updateUI(totalLoad, totalGenCapacity, systemStress) {
+        if (this.ui.clock) {
+            this.ui.clock.textContent = `T = ${this.currentTime.toFixed(1)}s`;
+        }
+
+        const load = totalLoad ?? this.nodes.filter(n => n.type === 'load').reduce((a, n) => a + n.pLoad, 0);
+        const gen = totalGenCapacity ?? this.nodes.filter(n => n.type === 'gen').reduce((a, n) => a + n.pGen, 0);
+        const stress = systemStress ?? Math.min(1.5, load / Math.max(1, gen));
+
+        if (this.ui.metrics) {
+            this.ui.metrics.innerHTML = `
+                Demanda Total: <strong>${load.toFixed(0)} MW</strong><br>
+                Generación Activa: ${(gen * stress).toFixed(0)} MW<br>
+                Estrés Red: <span style="color:${stress > 1 ? 'red' : CONFIG.COLORS.SOURCE}">${(stress * 100).toFixed(0)}%</span>
+            `;
+        }
+
+        if (this.ui.linesStatus) {
+            const critical = this.lines
+                .filter(l => l.status && l.currentLoadMva > 0)
+                .sort((a, b) => (b.currentLoadMva / b.capacityMva) - (a.currentLoadMva / a.capacityMva))
+                .slice(0, 5);
+
+            let html = '<table style="width:100%; font-size:0.75rem;">';
+            critical.forEach(l => {
+                const pct = ((l.currentLoadMva / l.capacityMva) * 100).toFixed(0);
+                const color = pct > 90 ? '#ff5252' : '#4CAF50';
+                html += `<tr style="color:${color}"><td>${l.id}</td><td>${pct}%</td></tr>`;
+            });
+            html += '</table>';
+            this.ui.linesStatus.innerHTML = html;
+        }
+
+        if (this.ui.overlay) {
+            this.ui.overlay.textContent = stress > 1
+                ? 'Alerta: Sobrecarga detectada\nMonitoreando protección térmica.'
+                : 'Sistema estable\nArrastra nodos para reorganizar.';
+        }
+    }
+}
+
+
+
+========================================
+FILE: src/core/PowerNode.js
+========================================
+export class PowerNode {
+    constructor(id, name, type, x, y) {
+        this.id = id;
+        this.name = name;
+        this.type = type; // 'gen' o 'load'
+        this.x = x;
+        this.y = y;
+
+        // Estado eléctrico y potencia
+        this.voltageKv = 230;
+        this.pGen = 0;
+        this.pLoad = 0;
+        this.netPower = 0;
+        this.currentGen = 0;
+        this.vVirtual = 1.0;
+
+        // Visuales
+        this.radius = type === 'gen' ? 18 : 10;
+        this.color = type === 'gen' ? '#4CAF50' : '#FF5252';
+        this.dragging = false;
+    }
+}
+
+
+
+========================================
+FILE: src/core/TransmissionLine.js
+========================================
+export class TransmissionLine {
+    constructor(id, fromNode, toNode) {
+        this.id = id;
+        this.from = fromNode;
+        this.to = toNode;
+
+        const dist = Math.hypot(fromNode.x - toNode.x, fromNode.y - toNode.y);
+
+        this.capacityMva = 350;
+        this.impedance = Math.max(0.01, dist / 1000);
+
+        this.status = true;
+        this.currentLoadMva = 0;
+        this.thermalLoad = 0;
+        this.thermalThreshold = 100;
+        this.thermalK = 8.0;
+    }
+
+    updateThermal(dt) {
+        if (!this.status) {
+            this.thermalLoad = 0;
+            return false;
+        }
+
+        const loadPct = (this.currentLoadMva / this.capacityMva) * 100;
+        const overloadRatio = Math.max(0, loadPct / 95 - 1.0);
+
+        if (overloadRatio > 0) {
+            this.thermalLoad += (overloadRatio * 10) * this.thermalK * dt;
+        } else {
+            this.thermalLoad *= Math.exp(-dt * 0.5);
+        }
+
+        return this.thermalLoad >= this.thermalThreshold;
+    }
+}
+
+
+
+========================================
+FILE: src/main.js
+========================================
+// 1. Importamos la Configuración Global
+import { CONFIG } from './config.js';
+
+// 2. Importamos el Core (Lógica)
+import { PowerGridSimulation } from './core/PowerGridSimulation.js';
+import { GameLoop } from './core/GameLoop.js';
+
+// 3. Importamos la UI (Presentación)
+import { CanvasRenderer } from './ui/CanvasRenderer.js';
+import { Interactions } from './ui/Interactions.js';
+import { SidebarUI } from './ui/hud/Sidebar.js';
+import { LogConsole } from './ui/hud/Console.js';
+
+// Función de inicialización principal
+const init = () => {
+    console.log(`⚡ Iniciando Pikachu-Simulator v${CONFIG.VERSION}...`);
+
+    // A. Referencias al DOM
+    const canvas = document.getElementById('grid-canvas');
+    const metrics = document.getElementById('system-metrics');
+    const linesStatus = document.getElementById('lines-status');
+    const overlay = document.getElementById('status-overlay');
+    const clock = document.getElementById('clock');
+    const logContainer = document.getElementById('log-console');
+
+    if (!canvas || !logContainer) {
+        console.error('Error: elementos base no encontrados');
+        return;
+    }
+
+    const resizeCanvas = () => {
+        const container = document.getElementById('canvas-container');
+        if (!container) return;
+        canvas.width = container.clientWidth;
+        canvas.height = container.clientHeight;
+    };
+    resizeCanvas();
+
+    const renderer = new CanvasRenderer(canvas);
+    const logger = new LogConsole(logContainer);
+    const simulation = new PowerGridSimulation(renderer, logger, { metrics, linesStatus, overlay, clock });
+    const controls = new Interactions(canvas, simulation);
+    const sidebar = new SidebarUI(simulation);
+
+    simulation.resetGrid(canvas.width, canvas.height);
+
+    const gameLoop = new GameLoop((deltaTime) => {
+        simulation.update(deltaTime);
+        renderer.render(simulation);
+    });
+
+    controls.initListeners();
+    sidebar.init();
+    logger.log('Listo. Arrastra nodos o usa los controles para ver eventos.');
+
+    gameLoop.start();
+
+    window.addEventListener('resize', () => {
+        resizeCanvas();
+        simulation.resetGrid(canvas.width, canvas.height);
+    });
+};
+
+// Esperar a que el HTML cargue completo antes de iniciar
+window.addEventListener('DOMContentLoaded', init);
+
+
+
+========================================
+FILE: src/ui/CanvasRenderer.js
+========================================
+import { CONFIG } from '../config.js';
+
+export class CanvasRenderer {
+    constructor(canvas) {
+        this.canvas = canvas;
+        this.ctx = canvas.getContext('2d');
+        // Offset para la animación de hormigas (línea punteada)
+        this.dashOffset = 0; 
+    }
+
+    clear() {
+        const { width, height } = this.canvas;
+        this.ctx.fillStyle = CONFIG.BACKGROUND_COLOR;
+        this.ctx.fillRect(0, 0, width, height);
+        
+        // Efecto viñeta (sombra en las esquinas)
+        const gradient = this.ctx.createRadialGradient(width/2, height/2, width/3, width/2, height/2, width);
+        gradient.addColorStop(0, 'rgba(0,0,0,0)');
+        gradient.addColorStop(1, 'rgba(0,0,0,0.6)');
+        this.ctx.fillStyle = gradient;
+        this.ctx.fillRect(0,0,width,height);
+    }
+
+    drawGrid() {
+        const step = 40;
+        const { width, height } = this.canvas;
+
+        this.ctx.strokeStyle = CONFIG.GRID_LINE_COLOR;
+        this.ctx.lineWidth = 1;
+        this.ctx.beginPath();
+        
+        // Dibujamos solo líneas sutiles
+        for (let x = 0; x <= width; x += step) {
+            this.ctx.moveTo(x, 0);
+            this.ctx.lineTo(x, height);
+        }
+        for (let y = 0; y <= height; y += step) {
+            this.ctx.moveTo(0, y);
+            this.ctx.lineTo(width, y);
+        }
+        this.ctx.stroke();
+    }
+
+    drawLines(lines) {
+        // Actualizamos el offset global para animar líneas punteadas
+        this.dashOffset -= 0.5;
+
+        // 1. Dibujar cables base (la estructura física)
+        lines.forEach(line => {
+            const { from, to, status } = line;
+            
+            this.ctx.beginPath();
+            this.ctx.moveTo(from.x, from.y);
+            this.ctx.lineTo(to.x, to.y);
+
+            if (!status) {
+                // Línea caída/apagada
+                this.ctx.strokeStyle = CONFIG.COLORS.LINE_OFF;
+                this.ctx.lineWidth = 1;
+                this.ctx.setLineDash([5, 5]);
+                this.ctx.shadowBlur = 0;
+                this.ctx.stroke();
+            } else {
+                // Línea activa - Base oscura
+                this.ctx.strokeStyle = '#222';
+                this.ctx.lineWidth = 3;
+                this.ctx.setLineDash([]);
+                this.ctx.stroke();
+            }
+        });
+
+        // 2. Dibujar Flujo de Energía (Partículas) sobre las líneas activas
+        this.ctx.shadowBlur = 10; // Glow effect
+        
+        lines.forEach(line => {
+            if (!line.status) return;
+
+            const loadPct = (line.currentLoadMva / line.capacityMva);
+            
+            // Color según carga
+            let color = CONFIG.COLORS.LINE_NORMAL; // Amarillo
+            let particleSize = 2;
+            let speed = 1;
+            
+            if (loadPct > 1.0) {
+                color = CONFIG.COLORS.LINE_CRITICAL; // Rojo
+                this.ctx.shadowColor = color;
+                particleSize = 3;
+                speed = 2.5; // Muy rápido si hay sobrecarga
+            } else {
+                this.ctx.shadowColor = color;
+                // Más carga = más velocidad visual
+                speed = 0.5 + (loadPct * 1.5); 
+            }
+
+            // Dibujar la "electricidad" como una línea delgada brillante en el centro
+            this.ctx.beginPath();
+            this.ctx.moveTo(line.from.x, line.from.y);
+            this.ctx.lineTo(line.to.x, line.to.y);
+            this.ctx.strokeStyle = color;
+            this.ctx.lineWidth = 1;
+            this.ctx.stroke();
+
+            // Dibujar Partículas (Paquetes de energía)
+            // Usamos el tiempo actual para calcular posición
+            const time = Date.now() / 1000;
+            const dist = Math.hypot(line.to.x - line.from.x, line.to.y - line.from.y);
+            const numParticles = Math.max(1, Math.floor(dist / 30)); // 1 partícula cada 30px
+
+            for(let i=0; i<numParticles; i++) {
+                // offset escalonado para que no vayan todas juntas
+                const offset = i / numParticles; 
+                // Formula de movimiento cíclico (0 a 1)
+                let t = (time * speed + offset) % 1; 
+
+                // Interpolación lineal (Lerp) para encontrar posición (x,y)
+                const px = line.from.x + (line.to.x - line.from.x) * t;
+                const py = line.from.y + (line.to.y - line.from.y) * t;
+
+                this.ctx.fillStyle = '#FFF'; // Núcleo blanco caliente
+                this.ctx.beginPath();
+                this.ctx.arc(px, py, particleSize, 0, Math.PI * 2);
+                this.ctx.fill();
+            }
+        });
+
+        this.ctx.shadowBlur = 0; // Resetear glow para lo siguiente
+        this.ctx.setLineDash([]);
+    }
+
+    drawNodes(nodes) {
+        nodes.forEach(node => {
+            // Configurar Glow según tipo
+            const isGen = node.type === 'gen';
+            const baseColor = isGen ? CONFIG.COLORS.SOURCE : CONFIG.COLORS.LOAD;
+            const glowColor = isGen ? CONFIG.COLORS.SOURCE_GLOW : CONFIG.COLORS.LOAD_GLOW;
+
+            // 1. Glow externo
+            this.ctx.shadowBlur = 15;
+            this.ctx.shadowColor = glowColor;
+
+            this.ctx.fillStyle = baseColor;
+            this.ctx.beginPath();
+
+            if (isGen) {
+                // Generador: Círculo sólido brillante
+                this.ctx.arc(node.x, node.y, node.radius, 0, Math.PI * 2);
+            } else {
+                // Carga: Cuadrado
+                this.ctx.rect(node.x - node.radius, node.y - node.radius, node.radius * 2, node.radius * 2);
+            }
+            this.ctx.fill();
+
+            // 2. Núcleo (Estilo UI futurista)
+            this.ctx.shadowBlur = 0; // Quitar glow para el detalle
+            this.ctx.strokeStyle = 'rgba(255,255,255,0.8)';
+            this.ctx.lineWidth = 2;
+            this.ctx.stroke();
+
+            // 3. Texto
+            this.ctx.fillStyle = '#fff';
+            this.ctx.font = 'bold 11px "Consolas"';
+            this.ctx.textAlign = 'center';
+            // Fondo semitransparente para el texto para legibilidad
+            this.ctx.fillText(node.name, node.x, node.y - node.radius - 8);
+        });
+    }
+
+    render(simulation) {
+        this.clear();
+        this.drawGrid();
+        this.drawLines(simulation.lines);
+        this.drawNodes(simulation.nodes);
+    }
+}
+
+
+========================================
+FILE: src/ui/Interactions.js
+========================================
+export class Interactions {
+    constructor(canvas, simulation) {
+        this.canvas = canvas;
+        this.simulation = simulation;
+        this.dragNode = null;
+    }
+
+    initListeners() {
+        this.canvas.addEventListener('mousedown', (e) => this.onMouseDown(e));
+        this.canvas.addEventListener('mousemove', (e) => this.onMouseMove(e));
+        window.addEventListener('mouseup', () => this.onMouseUp());
+    }
+
+    findNodeAt(x, y) {
+        return this.simulation.nodes.find(n => Math.hypot(x - n.x, y - n.y) < n.radius + 5);
+    }
+
+    onMouseDown(e) {
+        const rect = this.canvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        this.dragNode = this.findNodeAt(x, y) || null;
+    }
+
+    onMouseMove(e) {
+        if (!this.dragNode) return;
+        const rect = this.canvas.getBoundingClientRect();
+        this.dragNode.x = e.clientX - rect.left;
+        this.dragNode.y = e.clientY - rect.top;
+        this.simulation.solvePowerFlow();
+    }
+
+    onMouseUp() {
+        this.dragNode = null;
+    }
+}
+
+
+
+========================================
+FILE: src/ui/hud/Console.js
+========================================
+export class LogConsole {
+    constructor(container) {
+        this.container = container;
+    }
+
+    log(message, type = 'info') {
+        if (!this.container) return;
+        const entry = document.createElement('div');
+        entry.className = `log-entry log-${type}`;
+        entry.innerText = message;
+        this.container.prepend(entry);
+    }
+}
+
+
+
+========================================
+FILE: src/ui/hud/Sidebar.js
+========================================
+export class SidebarUI {
+    constructor(simulation) {
+        this.simulation = simulation;
+    }
+
+    init() {
+        const btnPeak = document.getElementById('btn-peak');
+        const btnTrip = document.getElementById('btn-trip');
+        const btnReset = document.getElementById('btn-reset');
+
+        if (btnPeak) btnPeak.addEventListener('click', () => this.simulation.triggerPeakLoad());
+        if (btnTrip) btnTrip.addEventListener('click', () => this.simulation.tripRandomLine());
+        if (btnReset) btnReset.addEventListener('click', () => {
+            const canvas = document.getElementById('grid-canvas');
+            this.simulation.resetGrid(canvas?.width, canvas?.height);
+        });
+    }
+}
+
+
+
+========================================
+FILE: styles/main.css
+========================================
+:root {
+    --bg-color: #050508;
+    --panel-bg: rgba(20, 20, 30, 0.85); /* Semitransparente */
+    --panel-border: 1px solid rgba(255, 215, 0, 0.15); /* Borde sutil amarillo */
+    --text-color: #e0e0e0;
+    --accent-color: #FFD700; /* Amarillo eléctrico */
+    --accent-hover: #FFEA00;
+    --danger-color: #FF3D00;
+    --grid-accent: #233042;
+    --font-ui: 'Segoe UI', Roboto, Helvetica, sans-serif;
+    --font-mono: 'Consolas', 'Monaco', monospace;
+}
+
+* { box-sizing: border-box; }
+
+body {
+    margin: 0;
+    font-family: var(--font-ui);
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow: hidden;
+}
+
+/* Header Cyberpunk */
+header {
+    background-color: #0b0b10;
+    padding: 10px 20px;
+    border-bottom: 1px solid #333;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 0 15px rgba(0,0,0,0.5);
+    z-index: 20;
+}
+
+h1 { 
+    margin: 0; 
+    font-size: 1.2rem; 
+    text-transform: uppercase; 
+    letter-spacing: 1px;
+    color: var(--accent-color);
+    text-shadow: 0 0 10px rgba(255, 215, 0, 0.3);
+}
+
+.subtitle { font-size: 0.75rem; color: #889; letter-spacing: 0.5px; }
+
+#clock {
+    font-family: var(--font-mono);
+    color: var(--accent-color);
+    border: 1px solid #333;
+    padding: 4px 10px;
+    border-radius: 4px;
+    background: #000;
+}
+
+#main-container {
+    display: flex;
+    flex: 1;
+    position: relative;
+    min-height: 0;
+}
+
+#canvas-container {
+    flex: 1;
+    position: relative;
+    /* Un gradiente sutil para dar profundidad */
+    background: radial-gradient(circle at center, #1a1a20 0%, #050508 100%);
+    overflow: hidden;
+}
+
+#grid-canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+/* UI Overlay Flotante */
+#status-overlay {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    pointer-events: none;
+    color: rgba(255,255,255,0.7);
+    font-size: 0.8rem;
+    font-family: var(--font-mono);
+    background: rgba(0,0,0,0.6);
+    padding: 10px;
+    border-radius: 4px;
+    border-left: 2px solid var(--accent-color);
+    backdrop-filter: blur(4px);
+}
+
+/* Barra Lateral Estilo Cristal */
+#sidebar {
+    width: 340px;
+    background-color: var(--panel-bg);
+    backdrop-filter: blur(10px); /* Efecto vidrio */
+    padding: 20px;
+    border-left: 1px solid #333;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    z-index: 10;
+    overflow-y: auto;
+}
+
+.panel {
+    background: rgba(255,255,255,0.03);
+    padding: 15px;
+    border-radius: 8px;
+    border: var(--panel-border);
+    box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+}
+
+.panel h3 { 
+    margin-top: 0; 
+    font-size: 0.8rem; 
+    text-transform: uppercase;
+    color: #889;
+    border-bottom: 1px solid #333; 
+    padding-bottom: 8px; 
+    margin-bottom: 12px;
+}
+
+/* Botones High-Tech */
+button {
+    background: linear-gradient(180deg, #333, #222);
+    color: #ddd;
+    border: 1px solid #444;
+    padding: 10px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    width: 100%;
+    margin-bottom: 8px;
+    font-size: 0.85rem;
+    transition: all 0.2s;
+    text-align: center;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+button:hover { 
+    background: #444; 
+    border-color: #666;
+    transform: translateY(-1px);
+}
+
+button:active { transform: translateY(1px); }
+
+button.primary { 
+    background: linear-gradient(180deg, #FFD700, #FFC107);
+    color: #000;
+    border: none;
+    font-weight: bold;
+    box-shadow: 0 0 10px rgba(255, 215, 0, 0.2);
+}
+
+button.primary:hover {
+    box-shadow: 0 0 15px rgba(255, 215, 0, 0.5);
+}
+
+button.danger { 
+    background: linear-gradient(180deg, #D32F2F, #B71C1C);
+    color: white;
+    border: none;
+}
+
+button.danger:hover {
+    box-shadow: 0 0 10px rgba(255, 61, 0, 0.4);
+}
+
+/* Consola y Datos */
+.metrics { font-family: var(--font-mono); font-size: 0.85rem; line-height: 1.8; }
+
+#log-console {
+    flex: 1;
+    background: #000;
+    border: 1px solid #333;
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    padding: 10px;
+    overflow-y: auto;
+    border-radius: 4px;
+    color: #0f0;
+    max-height: 180px;
+}
+
+/* Scrollbar personalizada */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: #111; }
+::-webkit-scrollbar-thumb { background: #444; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #666; }
+

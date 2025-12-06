@@ -1,18 +1,21 @@
 :root {
-    --bg-color: #1a1a1a;
-    --panel-color: #2d2d2d;
+    --bg-color: #050508;
+    --panel-bg: rgba(20, 20, 30, 0.85); /* Semitransparente */
+    --panel-border: 1px solid rgba(255, 215, 0, 0.15); /* Borde sutil amarillo */
     --text-color: #e0e0e0;
-    --accent-color: #4CAF50;
-    --danger-color: #ff5252;
-    --warn-color: #ff9800;
+    --accent-color: #FFD700; /* Amarillo eléctrico */
+    --accent-hover: #FFEA00;
+    --danger-color: #FF3D00;
     --grid-accent: #233042;
+    --font-ui: 'Segoe UI', Roboto, Helvetica, sans-serif;
+    --font-mono: 'Consolas', 'Monaco', monospace;
 }
 
 * { box-sizing: border-box; }
 
 body {
     margin: 0;
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    font-family: var(--font-ui);
     background-color: var(--bg-color);
     color: var(--text-color);
     display: flex;
@@ -21,17 +24,37 @@ body {
     overflow: hidden;
 }
 
+/* Header Cyberpunk */
 header {
-    background-color: var(--panel-color);
+    background-color: #0b0b10;
     padding: 10px 20px;
-    border-bottom: 1px solid #444;
+    border-bottom: 1px solid #333;
     display: flex;
     justify-content: space-between;
     align-items: center;
+    box-shadow: 0 0 15px rgba(0,0,0,0.5);
+    z-index: 20;
 }
 
-h1 { margin: 0; font-size: 1.2rem; }
-.subtitle { font-size: 0.8rem; color: #888; }
+h1 { 
+    margin: 0; 
+    font-size: 1.2rem; 
+    text-transform: uppercase; 
+    letter-spacing: 1px;
+    color: var(--accent-color);
+    text-shadow: 0 0 10px rgba(255, 215, 0, 0.3);
+}
+
+.subtitle { font-size: 0.75rem; color: #889; letter-spacing: 0.5px; }
+
+#clock {
+    font-family: var(--font-mono);
+    color: var(--accent-color);
+    border: 1px solid #333;
+    padding: 4px 10px;
+    border-radius: 4px;
+    background: #000;
+}
 
 #main-container {
     display: flex;
@@ -43,7 +66,8 @@ h1 { margin: 0; font-size: 1.2rem; }
 #canvas-container {
     flex: 1;
     position: relative;
-    background: radial-gradient(circle at center, #252525 0%, #151515 100%);
+    /* Un gradiente sutil para dar profundidad */
+    background: radial-gradient(circle at center, #1a1a20 0%, #050508 100%);
     overflow: hidden;
 }
 
@@ -53,78 +77,119 @@ h1 { margin: 0; font-size: 1.2rem; }
     height: 100%;
 }
 
+/* UI Overlay Flotante */
 #status-overlay {
     position: absolute;
-    top: 10px;
-    left: 10px;
+    top: 20px;
+    left: 20px;
     pointer-events: none;
-    color: rgba(255,255,255,0.6);
+    color: rgba(255,255,255,0.7);
     font-size: 0.8rem;
-    line-height: 1.4;
-    text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+    font-family: var(--font-mono);
+    background: rgba(0,0,0,0.6);
+    padding: 10px;
+    border-radius: 4px;
+    border-left: 2px solid var(--accent-color);
+    backdrop-filter: blur(4px);
 }
 
+/* Barra Lateral Estilo Cristal */
 #sidebar {
-    width: 320px;
-    background-color: var(--panel-color);
-    padding: 15px;
-    border-left: 1px solid #444;
+    width: 340px;
+    background-color: var(--panel-bg);
+    backdrop-filter: blur(10px); /* Efecto vidrio */
+    padding: 20px;
+    border-left: 1px solid #333;
     display: flex;
     flex-direction: column;
-    gap: 15px;
-    box-shadow: -2px 0 5px rgba(0,0,0,0.3);
+    gap: 20px;
     z-index: 10;
     overflow-y: auto;
 }
 
 .panel {
-    background: #363636;
-    padding: 10px;
-    border-radius: 5px;
-    border: 1px solid #444;
+    background: rgba(255,255,255,0.03);
+    padding: 15px;
+    border-radius: 8px;
+    border: var(--panel-border);
+    box-shadow: 0 4px 6px rgba(0,0,0,0.2);
 }
 
-.panel h3 { margin-top: 0; font-size: 0.9rem; border-bottom: 1px solid #555; padding-bottom: 5px; }
+.panel h3 { 
+    margin-top: 0; 
+    font-size: 0.8rem; 
+    text-transform: uppercase;
+    color: #889;
+    border-bottom: 1px solid #333; 
+    padding-bottom: 8px; 
+    margin-bottom: 12px;
+}
 
+/* Botones High-Tech */
 button {
-    background-color: #444;
-    color: white;
-    border: none;
-    padding: 8px 12px;
+    background: linear-gradient(180deg, #333, #222);
+    color: #ddd;
+    border: 1px solid #444;
+    padding: 10px 12px;
     border-radius: 4px;
     cursor: pointer;
     width: 100%;
-    margin-bottom: 5px;
-    transition: background 0.2s;
-    text-align: left;
+    margin-bottom: 8px;
+    font-size: 0.85rem;
+    transition: all 0.2s;
+    text-align: center;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
 }
 
-button:hover { background-color: #555; }
-button.primary { background-color: var(--accent-color); color: #fff; font-weight: bold; }
-button.danger { background-color: var(--danger-color); }
+button:hover { 
+    background: #444; 
+    border-color: #666;
+    transform: translateY(-1px);
+}
 
-.metrics { font-size: 0.85rem; line-height: 1.6; }
+button:active { transform: translateY(1px); }
+
+button.primary { 
+    background: linear-gradient(180deg, #FFD700, #FFC107);
+    color: #000;
+    border: none;
+    font-weight: bold;
+    box-shadow: 0 0 10px rgba(255, 215, 0, 0.2);
+}
+
+button.primary:hover {
+    box-shadow: 0 0 15px rgba(255, 215, 0, 0.5);
+}
+
+button.danger { 
+    background: linear-gradient(180deg, #D32F2F, #B71C1C);
+    color: white;
+    border: none;
+}
+
+button.danger:hover {
+    box-shadow: 0 0 10px rgba(255, 61, 0, 0.4);
+}
+
+/* Consola y Datos */
+.metrics { font-family: var(--font-mono); font-size: 0.85rem; line-height: 1.8; }
 
 #log-console {
     flex: 1;
     background: #000;
-    font-family: 'Consolas', monospace;
-    font-size: 0.75rem;
+    border: 1px solid #333;
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
     padding: 10px;
     overflow-y: auto;
     border-radius: 4px;
     color: #0f0;
-    max-height: 200px;
+    max-height: 180px;
 }
 
-.panel-console { display:flex; flex-direction:column; }
-
-#lines-status {
-    overflow-y: auto;
-    max-height: 250px;
-    font-family: 'Consolas', monospace;
-}
-
-.log-entry { margin-bottom: 2px; border-bottom: 1px solid #222; }
-.log-warn { color: var(--warn-color); }
-.log-error { color: var(--danger-color); font-weight: bold; }
+/* Scrollbar personalizada */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: #111; }
+::-webkit-scrollbar-thumb { background: #444; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #666; }
