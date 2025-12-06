@@ -3,12 +3,14 @@
 export class SidebarUI {
     constructor(simulation) {
         this.simulation = simulation;
-        this.controls = null; // Referencia a Interactions.js
+        this.controls = null;
         
-        // Elementos del DOM
         this.btnPeak = document.getElementById('btn-peak');
         this.btnTrip = document.getElementById('btn-trip');
         this.btnReset = document.getElementById('btn-reset');
+        
+        // 1. Referencia al nuevo botón
+        this.btnCut = document.getElementById('btn-cut'); 
     }
 
     setControls(controls) {
@@ -17,26 +19,33 @@ export class SidebarUI {
 
     init() {
         if (this.btnPeak) {
-            this.btnPeak.addEventListener('click', () => {
-                this.simulation.triggerPeakLoad();
-            });
+            this.btnPeak.addEventListener('click', () => this.simulation.triggerPeakLoad());
         }
 
         if (this.btnTrip) {
-            this.btnTrip.addEventListener('click', () => {
-                this.simulation.tripRandomLine();
-            });
+            this.btnTrip.addEventListener('click', () => this.simulation.tripRandomLine());
         }
 
         if (this.btnReset) {
-            this.btnReset.addEventListener('click', () => {
-                // Reiniciamos con el tamaño actual del canvas (aunque simulation ya usa WORLD constants)
-                this.simulation.resetGrid(); 
+            this.btnReset.addEventListener('click', () => this.simulation.resetGrid());
+        }
+
+        // 2. Lógica de la Tijera
+        if (this.btnCut) {
+            this.btnCut.addEventListener('click', () => {
+                if (!this.controls) return;
+
+                // Alternar entre modo 'cut' y 'normal'
+                if (this.controls.mode === 'normal') {
+                    this.controls.setMode('cut');
+                    this.btnCut.textContent = 'Cancelar Corte (Esc)';
+                    this.btnCut.classList.add('active');
+                } else {
+                    this.controls.setMode('normal');
+                    this.btnCut.textContent = '✂️ Cortar Línea (Manual)';
+                    this.btnCut.classList.remove('active');
+                }
             });
         }
-        
-        // Botón extra para "Modo Corte" (Si quisieras agregarlo al HTML)
-        // Por ahora simularemos que cortar líneas es con Ctrl + Click o agregamos un botón manualmente si existe
-        // Como no está en el HTML original, lo dejamos simple.
     }
 }

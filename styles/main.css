@@ -128,3 +128,17 @@ button.danger { background: var(--danger); }
 .log-entry.warn { color: var(--accent); }
 .log-entry.error { color: var(--danger); }
 .log-entry.success { color: var(--success); }
+button.warning {
+    background: #ff9800; /* Naranja */
+    color: #000;
+}
+
+button.warning:hover {
+    background: #ffb74d;
+}
+
+/* Estilo para cuando el botón está activo (hundido) */
+button.active {
+    outline: 2px solid #fff;
+    filter: brightness(1.2);
+}

@@ -9,21 +9,37 @@ export class Interactions {
         this.dragNode = null;
         this.mode = 'normal'; // 'normal' | 'cut'
         
-        // Variables para el Paneo (Mover mapa)
         this.isPanning = false;
         this.lastMouse = { x: 0, y: 0 };
     }
 
     initListeners() {
-        // Desactivar menú contextual (clic derecho) para usarlo para mover el mapa
+        // Desactivar menú contextual
         this.canvas.addEventListener('contextmenu', e => e.preventDefault());
         
         this.canvas.addEventListener('mousedown', (e) => this.onMouseDown(e));
         this.canvas.addEventListener('mousemove', (e) => this.onMouseMove(e));
         window.addEventListener('mouseup', () => this.onMouseUp());
         
-        // Escuchar rueda del mouse (Zoom)
+        // Zoom
         this.canvas.addEventListener('wheel', (e) => this.onWheel(e), { passive: false });
+
+        // --- AQUI VA EL CÓDIGO NUEVO (DENTRO DE LA FUNCIÓN) ---
+        
+        // Agregar funcionalidad a la tecla ESC
+        window.addEventListener('keydown', (e) => {
+            // Usamos arrow function (=>) para que 'this' siga siendo la clase
+            if (e.key === 'Escape' && this.mode === 'cut') {
+                this.setMode('normal');
+                
+                // Actualizar el texto del botón visualmente
+                const btnCut = document.getElementById('btn-cut');
+                if (btnCut) {
+                    btnCut.textContent = '✂️ Cortar Línea (Manual)';
+                    btnCut.classList.remove('active');
+                }
+            }
+        });
     }
 
     setMode(mode) {
@@ -31,7 +47,8 @@ export class Interactions {
         this.canvas.style.cursor = mode === 'cut' ? 'crosshair' : 'default';
     }
 
-    // Transformar coordenadas del mouse usando la cámara
+    // ... (El resto de métodos getMouseWorldPos, onMouseDown, etc. se quedan igual) ...
+
     getMouseWorldPos(e) {
         const rect = this.canvas.getBoundingClientRect();
         const screenX = e.clientX - rect.left;
@@ -42,7 +59,6 @@ export class Interactions {
     onMouseDown(e) {
         const worldPos = this.getMouseWorldPos(e);
 
-        // 1. Clic Derecho o Rueda presionada: Iniciar Paneo
         if (e.button === 2 || e.button === 1) {
             this.isPanning = true;
             this.lastMouse = { x: e.clientX, y: e.clientY };
@@ -50,18 +66,16 @@ export class Interactions {
             return;
         }
 
-        // 2. Modo CORTAR (Tijeras)
         if (this.mode === 'cut') {
             const line = this.findLineAt(worldPos);
             if (line) {
                 this.simulation.cutLine(line);
-                // Volver a modo normal después de cortar (opcional)
-                this.setMode('normal');
+                // Opcional: Si quieres que siga cortando, quita la siguiente línea
+                // this.setMode('normal'); 
             }
             return;
         }
 
-        // 3. Modo NORMAL: Arrastrar nodos
         const node = this.findNodeAt(worldPos);
         if (node) {
             this.dragNode = node;
@@ -71,7 +85,6 @@ export class Interactions {
     }
 
     onMouseMove(e) {
-        // A. Manejar Paneo de Cámara
         if (this.isPanning) {
             const dx = e.clientX - this.lastMouse.x;
             const dy = e.clientY - this.lastMouse.y;
@@ -82,15 +95,12 @@ export class Interactions {
 
         const worldPos = this.getMouseWorldPos(e);
 
-        // B. Arrastrar Nodo
         if (this.dragNode) {
             this.dragNode.x = worldPos.x;
             this.dragNode.y = worldPos.y;
-            // Actualizar lógica eléctrica si fuera necesario en tiempo real
             return;
         }
 
-        // C. Hover effects (Visual)
         const hoverNode = this.findNodeAt(worldPos);
         const hoverLine = this.findLineAt(worldPos);
 
@@ -119,16 +129,10 @@ export class Interactions {
         const rect = this.canvas.getBoundingClientRect();
         const mouseX = e.clientX - rect.left;
         const mouseY = e.clientY - rect.top;
-        
-        // Delegar lógica de zoom a la cámara
         this.camera.handleZoom(e.deltaY, mouseX, mouseY);
     }
 
-    // --- Helpers de Colisión ---
-
     findNodeAt(pos) {
-        // Busca si el mouse está sobre un nodo (considerando su radio y el zoom inverso si se quiere precisión)
-        // Usamos un radio de detección un poco más grande (20px en mundo virtual)
         const hitRadius = 25; 
         return this.simulation.nodes.find(n => {
             const dist = Math.hypot(n.x - pos.x, n.y - pos.y);
@@ -137,8 +141,7 @@ export class Interactions {
     }
 
     findLineAt(pos) {
-        // Distancia de un punto a un segmento de línea
-        const threshold = 15; // Grosor de detección
+        const threshold = 15; 
         return this.simulation.lines.find(l => {
             if (!l.status) return false;
             return this.pointToSegmentDist(pos.x, pos.y, l.from.x, l.from.y, l.to.x, l.to.y) < threshold;
