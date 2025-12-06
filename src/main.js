@@ -3,8 +3,7 @@ import { CONFIG } from './config.js';
 
 // 2. Importamos el Core (Lógica)
 import { PowerGridSimulation } from './core/PowerGridSimulation.js';
-import { GameLoop } from './core/GameLoop.js'; // Recomendado para manejar el tiempo
-import { FlowSolver } from './core/FlowSolver.js';
+import { GameLoop } from './core/GameLoop.js';
 
 // 3. Importamos la UI (Presentación)
 import { CanvasRenderer } from './ui/CanvasRenderer.js';
@@ -18,68 +17,48 @@ const init = () => {
 
     // A. Referencias al DOM
     const canvas = document.getElementById('grid-canvas');
-    const container = document.getElementById('app-container');
+    const metrics = document.getElementById('system-metrics');
+    const linesStatus = document.getElementById('lines-status');
+    const overlay = document.getElementById('status-overlay');
+    const clock = document.getElementById('clock');
+    const logContainer = document.getElementById('log-console');
 
-    if (!canvas) {
-        console.error("Error: No se encontró el elemento <canvas>");
+    if (!canvas || !logContainer) {
+        console.error('Error: elementos base no encontrados');
         return;
     }
 
-    // Ajustar canvas al tamaño de ventana (opcional, pero recomendado)
-    canvas.width = window.innerWidth - 300; // Restamos espacio del sidebar
-    canvas.height = window.innerHeight;
+    const resizeCanvas = () => {
+        const container = document.getElementById('canvas-container');
+        if (!container) return;
+        canvas.width = container.clientWidth;
+        canvas.height = container.clientHeight;
+    };
+    resizeCanvas();
 
-    // B. Instanciar el Sistema Central (El "Estado" del juego)
-    // PowerGridSimulation contiene la lista de nodos, cables y el estado actual.
-    const simulation = new PowerGridSimulation();
-    
-    // El Solver necesita acceso a la simulación para calcular flujos
-    const solver = new FlowSolver();
-
-    // C. Instanciar el Sistema de Renderizado
-    // El Renderer necesita el canvas para dibujar y saber qué dibujar (simulation)
     const renderer = new CanvasRenderer(canvas);
+    const logger = new LogConsole(logContainer);
+    const simulation = new PowerGridSimulation(renderer, logger, { metrics, linesStatus, overlay, clock });
+    const controls = new Interactions(canvas, simulation);
+    const sidebar = new SidebarUI(simulation);
 
-    // D. Instanciar Interacciones (Mouse/Teclado)
-    // Interactions necesita modificar la simulación y saber coordenadas del renderer
-    const controls = new Interactions(canvas, simulation, renderer);
+    simulation.resetGrid(canvas.width, canvas.height);
 
-    // E. Inicializar UI del DOM (Barras laterales, botones)
-    const sidebar = new SidebarUI(simulation, controls);
-    const logger = new LogConsole();
-
-    // F. Configurar el Bucle de Juego (Game Loop)
-    // Este ciclo corre 60 veces por segundo (aprox)
     const gameLoop = new GameLoop((deltaTime) => {
-        
-        // 1. UPDATE: Actualizar lógica física y eléctrica
-        // Si hay cambios en la red, recalculamos el flujo
-        if (simulation.isDirty) {
-            solver.calculateFlow(simulation);
-            simulation.isDirty = false; // Marcar como "limpio" hasta el prox cambio
-        }
-        
-        // Actualizar físicas (animaciones, partículas, sobrecargas)
         simulation.update(deltaTime);
-
-        // 2. DRAW: Dibujar todo en pantalla
-        renderer.clear();
-        renderer.drawGrid();              // Fondo
-        renderer.drawCables(simulation.cables, simulation.nodes);
-        renderer.drawNodes(simulation.nodes);
-        renderer.drawEffects();           // Chispas, íconos de alerta
-        
-        // (Opcional) Debug info
-        if (CONFIG.DEBUG_MODE) {
-            renderer.drawDebugInfo(simulation);
-        }
+        renderer.render(simulation);
     });
 
-    // G. ¡Arrancar motores!
-    controls.initListeners(); // Escuchar clics
-    sidebar.init();           // Crear botones HTML
-    logger.init();            // Colocar consola básica
-    gameLoop.start();         // Iniciar el requestAnimationFrame
+    controls.initListeners();
+    sidebar.init();
+    logger.log('Listo. Arrastra nodos o usa los controles para ver eventos.');
+
+    gameLoop.start();
+
+    window.addEventListener('resize', () => {
+        resizeCanvas();
+        simulation.resetGrid(canvas.width, canvas.height);
+    });
 };
 
 // Esperar a que el HTML cargue completo antes de iniciar

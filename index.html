@@ -7,8 +7,47 @@
     <link rel="stylesheet" href="./styles/main.css">
 </head>
 <body>
-    <div id="app-container">
-        <canvas id="grid-canvas"></canvas>
+    <header>
+        <div>
+            <h1>Simulador de Red Nacional (Escala Grande)</h1>
+            <div class="subtitle">Topología mallada dinámica</div>
+        </div>
+        <div id="clock">T = 0.0s</div>
+    </header>
+
+    <div id="main-container">
+        <div id="canvas-container">
+            <canvas id="grid-canvas"></canvas>
+            <div id="status-overlay">
+                Sistema estable<br>
+                Zoom automático.<br>
+                Arrastra nodos para reorganizar.
+            </div>
+        </div>
+
+        <aside id="sidebar">
+            <div class="panel">
+                <h3>Controles Globales</h3>
+                <button id="btn-peak" class="primary">⚡ Pico Nacional (+20%)</button>
+                <button id="btn-trip" class="danger">🎲 Falla Aleatoria de Línea</button>
+                <button id="btn-reset">🔄 Regenerar Topología</button>
+            </div>
+
+            <div class="panel">
+                <h3>Métricas en Tiempo Real</h3>
+                <div id="system-metrics" class="metrics">Calculando...</div>
+            </div>
+
+            <div class="panel">
+                <h3>Top 5 Líneas Críticas</h3>
+                <div id="lines-status"></div>
+            </div>
+
+            <div class="panel panel-console">
+                <h3>Registro de Eventos</h3>
+                <div id="log-console"></div>
+            </div>
+        </aside>
     </div>
 
     <script type="module" src="./src/main.js"></script>

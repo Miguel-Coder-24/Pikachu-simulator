@@ -1,12 +1,22 @@
 export class PowerNode {
-    constructor(id, x, y, type = 'generic') {
+    constructor(id, name, type, x, y) {
         this.id = id;
-        this.x = x; // Coordenada en la GRILLA (no píxeles)
+        this.name = name;
+        this.type = type; // 'gen' o 'load'
+        this.x = x;
         this.y = y;
-        this.type = type; // 'source', 'load', 'battery'
-        
-        // Estado eléctrico
-        this.voltage = 0;
-        this.isPowered = false;
+
+        // Estado eléctrico y potencia
+        this.voltageKv = 230;
+        this.pGen = 0;
+        this.pLoad = 0;
+        this.netPower = 0;
+        this.currentGen = 0;
+        this.vVirtual = 1.0;
+
+        // Visuales
+        this.radius = type === 'gen' ? 18 : 10;
+        this.color = type === 'gen' ? '#4CAF50' : '#FF5252';
+        this.dragging = false;
     }
 }

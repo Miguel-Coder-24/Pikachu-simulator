@@ -1,35 +1,36 @@
-import { CONFIG } from '../config.js';
-
 export class Interactions {
-    constructor(canvas, simulation, renderer) {
+    constructor(canvas, simulation) {
         this.canvas = canvas;
         this.simulation = simulation;
-        this.renderer = renderer;
-        this.currentType = 'source';
+        this.dragNode = null;
     }
 
     initListeners() {
-        this.canvas.addEventListener('mousedown', (e) => this.handleMouseDown(e));
-        this.canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+        this.canvas.addEventListener('mousedown', (e) => this.onMouseDown(e));
+        this.canvas.addEventListener('mousemove', (e) => this.onMouseMove(e));
+        window.addEventListener('mouseup', () => this.onMouseUp());
     }
 
-    handleMouseDown(e) {
+    findNodeAt(x, y) {
+        return this.simulation.nodes.find(n => Math.hypot(x - n.x, y - n.y) < n.radius + 5);
+    }
+
+    onMouseDown(e) {
         const rect = this.canvas.getBoundingClientRect();
-        const mouseX = e.clientX - rect.left;
-        const mouseY = e.clientY - rect.top;
-
-        // Convertir coordenadas de Píxeles a Grilla
-        const gridX = Math.floor(mouseX / CONFIG.GRID_SIZE);
-        const gridY = Math.floor(mouseY / CONFIG.GRID_SIZE);
-
-        // Click izquierdo usa el tipo seleccionado en la UI
-        // Click derecho sigue creando cargas para agilizar
-        const type = e.button === 2 ? 'load' : this.currentType;
-
-        this.simulation.addNode(gridX, gridY, type);
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        this.dragNode = this.findNodeAt(x, y) || null;
     }
 
-    setPlacementType(type) {
-        this.currentType = type;
+    onMouseMove(e) {
+        if (!this.dragNode) return;
+        const rect = this.canvas.getBoundingClientRect();
+        this.dragNode.x = e.clientX - rect.left;
+        this.dragNode.y = e.clientY - rect.top;
+        this.simulation.solvePowerFlow();
+    }
+
+    onMouseUp() {
+        this.dragNode = null;
     }
 }
