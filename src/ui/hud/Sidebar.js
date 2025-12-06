@@ -3,9 +3,12 @@
 export class SidebarUI {
     constructor(simulation) {
         this.simulation = simulation;
-        // Necesitamos acceso a los controles (Interactions) para cambiar el modo
-        // Lo asignaremos en el main.js
-        this.controls = null; 
+        this.controls = null; // Referencia a Interactions.js
+        
+        // Elementos del DOM
+        this.btnPeak = document.getElementById('btn-peak');
+        this.btnTrip = document.getElementById('btn-trip');
+        this.btnReset = document.getElementById('btn-reset');
     }
 
     setControls(controls) {
@@ -13,46 +16,27 @@ export class SidebarUI {
     }
 
     init() {
-        const btnPeak = document.getElementById('btn-peak');
-        const btnTrip = document.getElementById('btn-trip');
-        const btnReset = document.getElementById('btn-reset');
+        if (this.btnPeak) {
+            this.btnPeak.addEventListener('click', () => {
+                this.simulation.triggerPeakLoad();
+            });
+        }
 
-        // Referencia al contenedor de controles globales
-        const panel = document.querySelector('.panel'); 
+        if (this.btnTrip) {
+            this.btnTrip.addEventListener('click', () => {
+                this.simulation.tripRandomLine();
+            });
+        }
 
-        // 1. Crear botón de Tijeras dinámicamente
-        const btnCut = document.createElement('button');
-        btnCut.innerHTML = '✂️ Cortar Líneas';
-        btnCut.style.marginTop = '10px';
-        btnCut.style.border = '1px solid #FF3D00';
+        if (this.btnReset) {
+            this.btnReset.addEventListener('click', () => {
+                // Reiniciamos con el tamaño actual del canvas (aunque simulation ya usa WORLD constants)
+                this.simulation.resetGrid(); 
+            });
+        }
         
-        // Insertarlo después de los otros botones
-        panel.appendChild(btnCut);
-
-        // --- Listeners ---
-
-        if (btnPeak) btnPeak.addEventListener('click', () => this.simulation.triggerPeakLoad());
-        
-        if (btnTrip) btnTrip.addEventListener('click', () => this.simulation.tripRandomLine());
-        
-        if (btnReset) btnReset.addEventListener('click', () => {
-            const canvas = document.getElementById('grid-canvas');
-            this.simulation.resetGrid(canvas?.width, canvas?.height);
-        });
-
-        // Lógica del botón Tijeras (Toggle)
-        btnCut.addEventListener('click', () => {
-            if (!this.controls) return;
-
-            if (this.controls.mode === 'normal') {
-                this.controls.setMode('cut');
-                btnCut.classList.add('active-tool');
-                btnCut.innerHTML = '✂️ MODO CORTE ACTIVO';
-            } else {
-                this.controls.setMode('normal');
-                btnCut.classList.remove('active-tool');
-                btnCut.innerHTML = '✂️ Cortar Líneas';
-            }
-        });
+        // Botón extra para "Modo Corte" (Si quisieras agregarlo al HTML)
+        // Por ahora simularemos que cortar líneas es con Ctrl + Click o agregamos un botón manualmente si existe
+        // Como no está en el HTML original, lo dejamos simple.
     }
 }

@@ -1,23 +1,17 @@
 // src/main.js
 
 import { CONFIG } from './config.js';
-
-// --- CORE (Lógica) ---
 import { PowerGridSimulation } from './core/PowerGridSimulation.js';
 import { GameLoop } from './core/GameLoop.js';
-import { AssetLoader } from './core/AssetLoader.js'; 
+import { AssetLoader } from './core/AssetLoader.js';
+import { Camera } from './core/Camera.js';
 
-// --- UI (Presentación) ---
-// Estos están directamente en /ui/
-import { CanvasRenderer } from './ui/CanvasRenderer.js'; 
+// UI Imports
+import { CanvasRenderer } from './ui/CanvasRenderer.js';
 import { Interactions } from './ui/Interactions.js';
-
-// --- HUD (Interfaz de Usuario sobre el canvas) ---
-// Estos están dentro de /ui/hud/ según me indicaste
 import { SidebarUI } from './ui/hud/Sidebar.js';
 import { LogConsole } from './ui/hud/Console.js';
 
-// Función de inicialización principal
 const init = async () => {
     console.log(`⚡ Iniciando Pikachu-Simulator v${CONFIG.VERSION}...`);
 
@@ -25,19 +19,18 @@ const init = async () => {
     const canvas = document.getElementById('grid-canvas');
     const logContainer = document.getElementById('log-console');
     
-    // Elementos de la UI (asegúrate de que existan en tu index.html)
+    // Referencias UI HTML
     const metrics = document.getElementById('system-metrics');
     const linesStatus = document.getElementById('lines-status');
     const overlay = document.getElementById('status-overlay');
     const clock = document.getElementById('clock');
 
-    // Validación básica
     if (!canvas || !logContainer) {
-        console.error("❌ Error Crítico: No se encontraron los elementos base del DOM (canvas o consola).");
+        console.error("❌ Error: No se encontró canvas o consola.");
         return;
     }
 
-    // Ajustar canvas al tamaño del contenedor
+    // Ajustar tamaño del Canvas
     const resizeCanvas = () => {
         const container = document.getElementById('canvas-container');
         if (!container) return;
@@ -46,43 +39,45 @@ const init = async () => {
     };
     resizeCanvas();
 
-    // 2. Cargar Imágenes (Assets)
-    // Esto es vital para que no falle el renderizado de iconos
+    // 2. Cargar Recursos (Async)
     const assetLoader = new AssetLoader();
     const assets = await assetLoader.loadAll();
 
-    // 3. Inicializar Componentes del Sistema
+    // 3. Inicializar Sistema
     
-    // Renderer: Se encarga de pintar en el canvas
-    const renderer = new CanvasRenderer(canvas, assets);
-    
-    // Logger: Maneja los mensajes en la consola visual
-    const logger = new LogConsole(logContainer);
-    
-    // Simulation: El cerebro del sistema (contiene nodos y lógica eléctrica)
-    const simulation = new PowerGridSimulation(renderer, logger, { metrics, linesStatus, overlay, clock });
-    
-    // Controls: Maneja el mouse (arrastrar y cortar)
-    const controls = new Interactions(canvas, simulation);
-    
-    // Sidebar: Botones laterales
-    const sidebar = new SidebarUI(simulation);
+    // A) Cámara
+    const camera = new Camera(canvas.width, canvas.height);
 
-    // --- CONEXIÓN CLAVE PARA LA TIJERA ---
-    // Le pasamos los controles al sidebar para que el botón "Cortar" pueda cambiar el modo del mouse
-    sidebar.setControls(controls); 
+    // B) Renderizador (AQUI ESTABA EL ERROR: FALTABA PASAR LA CÁMARA)
+    const renderer = new CanvasRenderer(canvas, assets, camera); // <--- CORREGIDO
+
+    // C) Consola de logs
+    const logger = new LogConsole(logContainer);
+
+    // D) Simulación
+    const simulation = new PowerGridSimulation(renderer, logger, { metrics, linesStatus, overlay, clock });
+
+    // E) Controles (Mouse/Teclado)
+    const controls = new Interactions(canvas, simulation, camera);
+
+    // F) Sidebar (Botones)
+    const sidebar = new SidebarUI(simulation);
+    sidebar.setControls(controls);
+    sidebar.init();
 
     // 4. Iniciar Lógica
-    // Generamos la red inicial
-    simulation.resetGrid(canvas.width, canvas.height);
-    
-    // Iniciamos los escuchas de eventos (clics, movimiento mouse)
+    simulation.resetGrid(); // Ya no necesita params, usa CONFIG global
     controls.initListeners();
-    sidebar.init();
-    
-    logger.log('Sistema en línea. Listo para operación.', 'success');
 
-    // 5. Bucle de Juego (60 FPS aprox)
+    // CENTRAR CÁMARA EN EL MAPA INICIALMENTE
+    // Colombia en el mapa virtual (2000x2500) está aprox en el centro
+    camera.x = -600; 
+    camera.y = -800;
+    camera.zoom = 0.8;
+
+    logger.log('Sistema en línea. Renderizando...', 'success');
+
+    // 5. Bucle de Juego
     const gameLoop = new GameLoop((deltaTime) => {
         simulation.update(deltaTime);
         renderer.render(simulation);
@@ -90,12 +85,11 @@ const init = async () => {
 
     gameLoop.start();
 
-    // Manejar redimensionado de ventana para que el canvas no se deforme
+    // Resize listener
     window.addEventListener('resize', () => {
         resizeCanvas();
-        simulation.resetGrid(canvas.width, canvas.height);
+        // Opcional: simulation.resetGrid(); si quieres regenerar al cambiar tamaño
     });
 };
 
-// Esperar a que el HTML cargue completo antes de iniciar
 window.addEventListener('DOMContentLoaded', init);
