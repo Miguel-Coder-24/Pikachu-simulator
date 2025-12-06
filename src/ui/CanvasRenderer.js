@@ -1,35 +1,34 @@
+// src/ui/CanvasRenderer.js
+
 import { CONFIG } from '../config.js';
 
 export class CanvasRenderer {
-    constructor(canvas) {
+    // 1. Recibimos los assets en el constructor
+    constructor(canvas, assets) {
         this.canvas = canvas;
         this.ctx = canvas.getContext('2d');
-        // Offset para la animación de hormigas (línea punteada)
-        this.dashOffset = 0; 
+        this.assets = assets; // Guardamos las imágenes
     }
 
     clear() {
+        // (Igual que antes...)
         const { width, height } = this.canvas;
         this.ctx.fillStyle = CONFIG.BACKGROUND_COLOR;
         this.ctx.fillRect(0, 0, width, height);
-        
-        // Efecto viñeta (sombra en las esquinas)
         const gradient = this.ctx.createRadialGradient(width/2, height/2, width/3, width/2, height/2, width);
         gradient.addColorStop(0, 'rgba(0,0,0,0)');
-        gradient.addColorStop(1, 'rgba(0,0,0,0.6)');
+        gradient.addColorStop(1, 'rgba(0,0,0,0.7)');
         this.ctx.fillStyle = gradient;
         this.ctx.fillRect(0,0,width,height);
     }
 
     drawGrid() {
+        // (Igual que antes...)
         const step = 40;
         const { width, height } = this.canvas;
-
         this.ctx.strokeStyle = CONFIG.GRID_LINE_COLOR;
         this.ctx.lineWidth = 1;
         this.ctx.beginPath();
-        
-        // Dibujamos solo líneas sutiles
         for (let x = 0; x <= width; x += step) {
             this.ctx.moveTo(x, 0);
             this.ctx.lineTo(x, height);
@@ -42,26 +41,20 @@ export class CanvasRenderer {
     }
 
     drawLines(lines) {
-        // Actualizamos el offset global para animar líneas punteadas
-        this.dashOffset -= 0.5;
-
-        // 1. Dibujar cables base (la estructura física)
+        // 1. Dibujar cables base (Igual que antes)
         lines.forEach(line => {
             const { from, to, status } = line;
-            
             this.ctx.beginPath();
             this.ctx.moveTo(from.x, from.y);
             this.ctx.lineTo(to.x, to.y);
 
             if (!status) {
-                // Línea caída/apagada
                 this.ctx.strokeStyle = CONFIG.COLORS.LINE_OFF;
                 this.ctx.lineWidth = 1;
                 this.ctx.setLineDash([5, 5]);
                 this.ctx.shadowBlur = 0;
                 this.ctx.stroke();
             } else {
-                // Línea activa - Base oscura
                 this.ctx.strokeStyle = '#222';
                 this.ctx.lineWidth = 3;
                 this.ctx.setLineDash([]);
@@ -69,100 +62,105 @@ export class CanvasRenderer {
             }
         });
 
-        // 2. Dibujar Flujo de Energía (Partículas) sobre las líneas activas
-        this.ctx.shadowBlur = 10; // Glow effect
-        
+        // 2. NUEVO: Dibujar "Rayos" de energía
+        this.ctx.setLineDash([]);
+        this.ctx.lineCap = 'round'; // Puntas redondeadas para los rayos
+
         lines.forEach(line => {
             if (!line.status) return;
 
             const loadPct = (line.currentLoadMva / line.capacityMva);
-            
-            // Color según carga
-            let color = CONFIG.COLORS.LINE_NORMAL; // Amarillo
-            let particleSize = 2;
+            let color = CONFIG.COLORS.LINE_NORMAL;
+            let rayLength = 15; // Longitud del rayo
             let speed = 1;
+            let glowSize = 10;
             
             if (loadPct > 1.0) {
-                color = CONFIG.COLORS.LINE_CRITICAL; // Rojo
-                this.ctx.shadowColor = color;
-                particleSize = 3;
-                speed = 2.5; // Muy rápido si hay sobrecarga
+                color = CONFIG.COLORS.LINE_CRITICAL;
+                speed = 2.5;
+                rayLength = 25; // Rayos más largos si hay peligro
+                glowSize = 20;
             } else {
-                this.ctx.shadowColor = color;
-                // Más carga = más velocidad visual
-                speed = 0.5 + (loadPct * 1.5); 
+                speed = 0.5 + (loadPct * 2.0); 
             }
 
-            // Dibujar la "electricidad" como una línea delgada brillante en el centro
-            this.ctx.beginPath();
-            this.ctx.moveTo(line.from.x, line.from.y);
-            this.ctx.lineTo(line.to.x, line.to.y);
+            this.ctx.shadowColor = color;
+            this.ctx.shadowBlur = glowSize;
             this.ctx.strokeStyle = color;
-            this.ctx.lineWidth = 1;
-            this.ctx.stroke();
+            this.ctx.lineWidth = 2;
 
-            // Dibujar Partículas (Paquetes de energía)
-            // Usamos el tiempo actual para calcular posición
+            // Cálculos vectoriales para dirección del rayo
+            const dx = line.to.x - line.from.x;
+            const dy = line.to.y - line.from.y;
+            const dist = Math.hypot(dx, dy);
+            // Vectores unitarios normalizados (dirección)
+            const nx = dx / dist;
+            const ny = dy / dist;
+
             const time = Date.now() / 1000;
-            const dist = Math.hypot(line.to.x - line.from.x, line.to.y - line.from.y);
-            const numParticles = Math.max(1, Math.floor(dist / 30)); // 1 partícula cada 30px
+            // Menos partículas pero más impactantes
+            const numParticles = Math.max(1, Math.floor(dist / 60)); 
 
             for(let i=0; i<numParticles; i++) {
-                // offset escalonado para que no vayan todas juntas
                 const offset = i / numParticles; 
-                // Formula de movimiento cíclico (0 a 1)
                 let t = (time * speed + offset) % 1; 
 
-                // Interpolación lineal (Lerp) para encontrar posición (x,y)
-                const px = line.from.x + (line.to.x - line.from.x) * t;
-                const py = line.from.y + (line.to.y - line.from.y) * t;
+                // Posición de la cabeza del rayo
+                const headX = line.from.x + dx * t;
+                const headY = line.from.y + dy * t;
 
-                this.ctx.fillStyle = '#FFF'; // Núcleo blanco caliente
+                // Posición de la cola del rayo (hacia atrás según la dirección)
+                const tailX = headX - nx * rayLength;
+                const tailY = headY - ny * rayLength;
+
+                // Dibujar el rayo como una línea brillante
                 this.ctx.beginPath();
-                this.ctx.arc(px, py, particleSize, 0, Math.PI * 2);
-                this.ctx.fill();
+                this.ctx.moveTo(tailX, tailY);
+                this.ctx.lineTo(headX, headY);
+                
+                // Truco visual: el núcleo es blanco, el borde es el color
+                this.ctx.strokeStyle = '#FFF'; 
+                this.ctx.lineWidth = 2;
+                this.ctx.stroke();
+                
+                // Segunda pasada para el color exterior (el glow lo hace el shadowBlur)
+                this.ctx.strokeStyle = color;
+                this.ctx.lineWidth = 1;
+                this.ctx.stroke();
             }
         });
 
-        this.ctx.shadowBlur = 0; // Resetear glow para lo siguiente
-        this.ctx.setLineDash([]);
+        this.ctx.shadowBlur = 0;
+        this.ctx.lineCap = 'butt'; // Reset
     }
 
+    // 3. NUEVO: Dibujar Nodos usando IMÁGENES
     drawNodes(nodes) {
         nodes.forEach(node => {
-            // Configurar Glow según tipo
             const isGen = node.type === 'gen';
-            const baseColor = isGen ? CONFIG.COLORS.SOURCE : CONFIG.COLORS.LOAD;
+            // Seleccionar la imagen correcta
+            const img = isGen ? this.assets.gen : this.assets.load;
             const glowColor = isGen ? CONFIG.COLORS.SOURCE_GLOW : CONFIG.COLORS.LOAD_GLOW;
+            
+            // Tamaño del ícono
+            const size = isGen ? 40 : 32; 
 
-            // 1. Glow externo
-            this.ctx.shadowBlur = 15;
+            // Glow intenso detrás del ícono
+            this.ctx.shadowBlur = 25;
             this.ctx.shadowColor = glowColor;
+            
+            // Dibujar imagen centrada en las coordenadas del nodo
+            // drawImage(imagen, x - mitad_ancho, y - mitad_alto, ancho, alto)
+            this.ctx.drawImage(img, node.x - size/2, node.y - size/2, size, size);
 
-            this.ctx.fillStyle = baseColor;
-            this.ctx.beginPath();
+            // Reset glow para el texto
+            this.ctx.shadowBlur = 0;
 
-            if (isGen) {
-                // Generador: Círculo sólido brillante
-                this.ctx.arc(node.x, node.y, node.radius, 0, Math.PI * 2);
-            } else {
-                // Carga: Cuadrado
-                this.ctx.rect(node.x - node.radius, node.y - node.radius, node.radius * 2, node.radius * 2);
-            }
-            this.ctx.fill();
-
-            // 2. Núcleo (Estilo UI futurista)
-            this.ctx.shadowBlur = 0; // Quitar glow para el detalle
-            this.ctx.strokeStyle = 'rgba(255,255,255,0.8)';
-            this.ctx.lineWidth = 2;
-            this.ctx.stroke();
-
-            // 3. Texto
+            // Texto
             this.ctx.fillStyle = '#fff';
             this.ctx.font = 'bold 11px "Consolas"';
             this.ctx.textAlign = 'center';
-            // Fondo semitransparente para el texto para legibilidad
-            this.ctx.fillText(node.name, node.x, node.y - node.radius - 8);
+            this.ctx.fillText(node.name, node.x, node.y + size/2 + 12);
         });
     }
 

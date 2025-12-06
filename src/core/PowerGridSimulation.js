@@ -219,4 +219,15 @@ export class PowerGridSimulation {
                 : 'Sistema estable\nArrastra nodos para reorganizar.';
         }
     }
+
+    cutLine(line) {
+        if (!line || !line.status) return;
+        
+        line.status = false; // Desactivar línea
+        this.logger.log(`MANUAL: Corte de línea ${line.id}`, 'warn');
+        
+        // Recalcular flujo eléctrico inmediatamente
+        this.solvePowerFlow();
+        this.updateUI();
+    }
 }
