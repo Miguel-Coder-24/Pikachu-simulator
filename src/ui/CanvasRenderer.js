@@ -167,7 +167,9 @@ export class CanvasRenderer {
     }
 
     drawNodes(nodes) {
-        const invScale = 1 / this.camera.zoom;
+        // Obtenemos el zoom actual para usarlo en la lógica
+        const currentZoom = this.camera.zoom;
+        const invScale = 1 / currentZoom;
         const iconSize = 32; 
 
         nodes.forEach(node => {
@@ -178,6 +180,8 @@ export class CanvasRenderer {
 
             this.ctx.save();
             this.ctx.translate(node.x, node.y);
+            
+            // Mantiene el icono del mismo tamaño sin importar el zoom
             this.ctx.scale(invScale, invScale);
 
             if (isGen) {
@@ -189,12 +193,24 @@ export class CanvasRenderer {
             this.ctx.shadowColor = node.glowColor;
             this.ctx.drawImage(img, -iconSize/2, -iconSize/2, iconSize, iconSize);
 
-            this.ctx.font = 'bold 12px Consolas';
-            this.ctx.fillStyle = '#fff';
-            this.ctx.textAlign = 'center';
-            this.ctx.shadowBlur = 4;
-            this.ctx.shadowColor = '#000';
-            this.ctx.fillText(node.name, 0, iconSize/2 + 12);
+            // --- INICIO DE LA MODIFICACIÓN ---
+            
+            // Definimos cuándo debe aparecer el texto
+            // Si es 'gen', aparece casi siempre (0.5)
+            // Si es municipio/carga, solo aparece si el zoom es mayor a 2.5 (tienes que acercarte)
+            const umbralTexto = isGen ? 0.5 : 6.0;
+
+            if (currentZoom > umbralTexto) {
+                this.ctx.font = 'bold 12px Consolas';
+                this.ctx.fillStyle = '#fff';
+                this.ctx.textAlign = 'center';
+                this.ctx.shadowBlur = 4;
+                this.ctx.shadowColor = '#000';
+                
+                // Dibujamos el texto
+                this.ctx.fillText(node.name, 0, iconSize/2 + 12);
+            }
+            // --- FIN DE LA MODIFICACIÓN ---
 
             this.ctx.restore();
         });

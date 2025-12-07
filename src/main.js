@@ -12,8 +12,30 @@ import { Interactions } from './ui/Interactions.js';
 import { SidebarUI } from './ui/hud/Sidebar.js';
 import { LogConsole } from './ui/hud/Console.js';
 
+// Función para cargar y parsear el archivo JSON
+const getParsedData = async (url) => {
+    try {
+        const response = await fetch(url);
+        if (!response.ok) {
+            throw new Error(`Error de red o archivo no encontrado: ${response.status}`);
+        }
+        const data = await response.json();
+        
+        // Usamos las claves exactas de tu archivo JSON: Proyectos, Municipios, Relaciones.
+        return {
+            generatorData: data.Proyectos || [],  // Hoja 1: Generadores
+            loadData: data.Municipios || [],      // Hoja 2: Receptores
+            relationData: data.Relaciones || []   // Hoja 3: Relaciones (Líneas)
+        };
+    } catch (error) {
+        console.error("❌ Error al cargar o parsear el JSON de datos:", error);
+        alert("No se pudo cargar la data. Revisa la consola y la ruta del archivo JSON.");
+        return { generatorData: [], loadData: [], relationData: [] };
+    }
+};
+
 const init = async () => {
-    console.log(`⚡ Iniciando Pikachu-Simulator v${CONFIG.VERSION}...`);
+    console.log(`⚡ Iniciando Pikachu-Simulator v${CONFIG.VERSION}...`); // [cite: 1308]
 
     // 1. Referencias al DOM
     const canvas = document.getElementById('grid-canvas');
@@ -46,28 +68,44 @@ const init = async () => {
     // 3. Inicializar Sistema
     
     // A) Cámara
-    const camera = new Camera(canvas.width, canvas.height);
-
-    // B) Renderizador (AQUI ESTABA EL ERROR: FALTABA PASAR LA CÁMARA)
-    const renderer = new CanvasRenderer(canvas, assets, camera); // <--- CORREGIDO
-
+   const camera = new Camera(canvas.width, canvas.height);
+    // B) Renderizador
+    const renderer = new CanvasRenderer(canvas, assets, camera);
     // C) Consola de logs
     const logger = new LogConsole(logContainer);
 
     // D) Simulación
-    const simulation = new PowerGridSimulation(renderer, logger, { metrics, linesStatus, overlay, clock });
+    const simulation = new PowerGridSimulation(renderer, logger, { metrics, linesStatus, overlay, clock }); // [cite: 1313]
 
-    // E) Controles (Mouse/Teclado)
+    // 🛑 NUEVO PASO CRÍTICO: Cargar datos de manera asíncrona
+    const JSON_PATH = './src/data/datos_json_unificados.json';
+    const { generatorData, loadData, relationData } = await getParsedData(JSON_PATH); 
+    
+    // E) Controles
     const controls = new Interactions(canvas, simulation, camera);
-
-    // F) Sidebar (Botones)
     const sidebar = new SidebarUI(simulation);
     sidebar.setControls(controls);
     sidebar.init();
 
     // 4. Iniciar Lógica
-    simulation.resetGrid(); // Ya no necesita params, usa CONFIG global
+    simulation.resetGrid(generatorData, loadData, relationData); 
     controls.initListeners();
+
+    // --- CÓDIGO AGREGADO: Lógica del Botón Reiniciar ---
+    const btnRestart = document.getElementById('btn-restart');
+    if (btnRestart) {
+        btnRestart.addEventListener('click', () => {
+            // Enviamos un mensaje a la consola del juego
+            logger.log("🔄 Reiniciando sistema a condiciones iniciales...", "success");
+            
+            // Llamamos a resetGrid con los mismos datos originales. 
+            // Esto elimina líneas cortadas, reinicia las cargas y regenera la red.
+            simulation.resetGrid(generatorData, loadData, relationData);
+            // 2. REINICIAR EL RELOJ (Nueva línea)
+            simulation.currentTime = 0;
+        });
+    }
+    // ---------------------------------------------------
 
     // CENTRAR CÁMARA EN EL MAPA INICIALMENTE
     // Colombia en el mapa virtual (2000x2500) está aprox en el centro
@@ -82,7 +120,6 @@ const init = async () => {
         simulation.update(deltaTime);
         renderer.render(simulation);
     });
-
     gameLoop.start();
 
     // Resize listener

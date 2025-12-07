@@ -1,7 +1,6 @@
 import { PowerNode } from './PowerNode.js';
 import { TransmissionLine } from './TransmissionLine.js';
 import { CONFIG } from '../config.js';
-import { REAL_NODES_DATA } from '../data/colombia_outline.js';
 
 export class PowerGridSimulation {
     constructor(renderer, logger, ui) {
@@ -11,6 +10,8 @@ export class PowerGridSimulation {
 
         this.nodes = [];
         this.lines = [];
+        this.nodeMap = new Map(); // <--- IMPORTANTE: Agregado aquí
+        
         this.currentTime = 0;
         this.timeStep = 0.05;
         this.accumulator = 0;
@@ -18,102 +19,239 @@ export class PowerGridSimulation {
         // Bounding Box de Colombia
         this.geoBounds = {
             minLon: -82.0, maxLon: -66.0,
-            minLat: -4.5,  maxLat: 13.5
+            minLat: -5.0,  maxLat: 14.0
         };
     }
 
-    // --- CORRECCIÓN CLAVE ---
-    // Ya no usamos width/height de la pantalla. Usamos el WORLD_WIDTH/HEIGHT fijo.
     projectToWorld(lat, lon) {
         const xPct = (lon - this.geoBounds.minLon) / (this.geoBounds.maxLon - this.geoBounds.minLon);
         const yPct = (this.geoBounds.maxLat - lat) / (this.geoBounds.maxLat - this.geoBounds.minLat);
-
         return {
             x: xPct * CONFIG.WORLD_WIDTH,
             y: yPct * CONFIG.WORLD_HEIGHT
         };
     }
 
-    resetGrid() {
-        // Nota: Ya no necesitamos recibir canvasWidth/Height aquí
-        this.currentTime = 0;
+    resetGrid(generatorData, loadData, relationData) {
         this.nodes = [];
         this.lines = [];
-        this.accumulator = 0;
+        this.nodeMap.clear();
 
-        this.logger.log('🌐 Cargando Topología Nacional Georreferenciada...', 'info');
-
-        // 1. Crear Nodos Reales proyectados al Mundo Virtual
-        REAL_NODES_DATA.forEach(data => {
-            const coords = this.projectToWorld(data.lat, data.lon);
-            
-            const node = new PowerNode(data.id, data.name, data.type, coords.x, coords.y);
-            
-            if (data.type === 'gen') node.pGen = data.mw;
-            else node.pLoad = data.mw / 10;
-
+        // 1. Crear Nodos de Generación
+        generatorData.forEach(data => {
+            const id = data.ID; 
+            const coords = this.projectToWorld(data.coordy, data.coordx);
+            const node = new PowerNode(id, data.nombre, 'gen', coords.x, coords.y);
+            node.pGen = data.capacidad; 
             this.nodes.push(node);
+            this.nodeMap.set(id, node);
         });
 
-        // 2. Conexión Automática (Vecinos cercanos)
-        this.nodes.forEach((nodeA) => {
-            const neighbors = this.nodes
-                .filter(n => n !== nodeA)
-                .map(n => ({
-                    node: n,
-                    dist: Math.hypot(nodeA.x - n.x, nodeA.y - n.y)
-                }))
-                .sort((a, b) => a.dist - b.dist)
-                .slice(0, 2); // Conectar con los 2 más cercanos
+        // 2. Crear Nodos de Carga (Municipios)
+        loadData.forEach(data => {
+            const id = data.ID; 
+            const coords = this.projectToWorld(data.coordy, data.coordx);
+            const node = new PowerNode(id, data.municipio, 'load', coords.x, coords.y);
+            node.pLoad = data.consumo; 
+            this.nodes.push(node);
+            this.nodeMap.set(id, node);
+        });
 
-            neighbors.forEach(({ node: nodeB }) => {
-                const exists = this.lines.find(l => 
-                    (l.from === nodeA && l.to === nodeB) || 
-                    (l.from === nodeB && l.to === nodeA)
-                );
-                if (!exists) {
-                    const id = `L-${this.lines.length + 1}`;
-                    this.lines.push(new TransmissionLine(id, nodeA, nodeB));
-                }
+        // 3. Llamamos a la función que construye TODAS las líneas (Principal + Backbone + Malla)
+        this._buildTopology(relationData);
+
+        // Inicializar cálculos
+        this.solvePowerFlow();
+        this.updateUI();
+    } 
+    _buildTopology(relationData) {
+        this.lines = [];
+        this.nodes.forEach(n => n.connections = []);
+
+        // 1. LÍNEAS DE GENERACIÓN (Las intocables)
+        // Conectan Generador -> Municipio
+        relationData.forEach((relation) => {
+            const genId = relation.idproyecto; 
+            const loadId = relation.idmunicipio;
+            const nodeA = this.nodeMap.get(genId);
+            const nodeB = this.nodeMap.get(loadId);
+
+            if (nodeA && nodeB) {
+                const nA = (nodeA.name || genId).toString().replace(/\s/g, '');
+                const nB = (nodeB.name || loadId).toString().replace(/\s/g, '');
+                // Prefijo GEN para identificar líneas de alta potencia
+                const id = `GEN_${nA}_${nB}`; 
+                
+                // CAPACIDAD 5000 MVA (Indestructibles en condiciones normales)
+                this.lines.push(new TransmissionLine(id, nodeA, nodeB, 5000)); 
+            }
+        });
+
+        // 2. FILTRO ESTRICTO: SOLO MUNICIPIOS (CARGAS)
+        // Corregimos el error: Sacamos a los generadores de esta lista
+        const municipios = this.nodes.filter(n => n.type === 'load');
+
+        // 3. COLUMNA VERTEBRAL (Backbone)
+        // Conectamos Norte a Sur para unificar el país
+        const ordenados = [...municipios].sort((a, b) => a.y - b.y);
+
+        for (let i = 0; i < ordenados.length - 1; i++) {
+            const muniA = ordenados[i];
+            const muniB = ordenados[i + 1];
+
+            const dist = Math.hypot(muniA.x - muniB.x, muniA.y - muniB.y);
+            
+            // Si están muy lejos, es una línea de Alta Tensión (HV)
+            // Si están cerca, es un enlace regional (LINK)
+            const tipo = dist > 300 ? "HV_LONG" : "LINK";
+            const capacidad = dist > 300 ? 4000 : 1500; // Capacidad sobrada
+
+            this._conectarSeguro(muniA, muniB, tipo, capacidad);
+        }
+
+        // 4. MALLA LOCAL (Barrios)
+        const RADIO_VECINDAD = 200;
+        
+        municipios.forEach(muniA => {
+            const vecinos = municipios
+                .filter(muniB => muniB !== muniA)
+                .map(muniB => ({
+                    nodo: muniB,
+                    dist: Math.hypot(muniA.x - muniB.x, muniA.y - muniB.y)
+                }))
+                .filter(par => par.dist < RADIO_VECINDAD)
+                .sort((a, b) => a.dist - b.dist);
+
+            // Conectamos con los 2 vecinos más cercanos
+            vecinos.slice(0, 2).forEach(v => {
+                // Capacidad robusta para distribución (1000)
+                this._conectarSeguro(muniA, v.nodo, "DIST", 1000); 
             });
         });
 
-        this.logger.log(`Mapa cargado: ${this.nodes.length} activos. Coordenadas sincronizadas.`, 'success');
-        this.solvePowerFlow();
-        this.updateUI();
+        this.logger.log(`Topología Blindada: ${this.lines.length} líneas. Generadores aislados de red local.`, 'success');
+    
+    }
+
+
+    // =========================================================
+    // HELPER: Función auxiliar para crear líneas sin repetir
+    // (Pega esto DENTRO de la clase PowerGridSimulation, 
+    //  justo después de que termine _buildTopology)
+    // =========================================================
+    _conectarSeguro(nodoA, nodoB, prefijo, capacidad) {
+        // 1. CHEQUEO DE SEGURIDAD: ¿Ya están conectados estos dos nodos?
+        // Esto evita que pongamos una línea "DIST" donde ya hay una "GEN" o "HV"
+        const yaConectados = this.lines.some(l => 
+            (l.from === nodoA && l.to === nodoB) || 
+            (l.from === nodoB && l.to === nodoA)
+        );
+
+        if (yaConectados) return; // Si ya existe conexión, NO hacemos nada.
+
+        // Si no existe, procedemos a crearla
+        const nA = (nodoA.name || nodoA.id).toString().replace(/\s/g, '');
+        const nB = (nodoB.name || nodoB.id).toString().replace(/\s/g, '');
+        const nombres = [nA, nB].sort();
+        
+        const lineId = `${prefijo}_${nombres[0]}_${nombres[1]}`;
+
+        // Chequeo por ID (por si acaso)
+        if (!this.lines.some(l => l.id === lineId)) {
+            const linea = new TransmissionLine(lineId, nodoA, nodoB, capacidad);
+            this.lines.push(linea);
+        }
     }
 
     // ... Resto de métodos (solvePowerFlow, triggerPeakLoad, etc) IGUALES ...
+    // En src/core/PowerGridSimulation.js
+
     solvePowerFlow() {
+        // 1. Calcular DEMANDA TOTAL (Suma de consumos)
         let totalLoad = 0;
-        let totalGenCapacity = 0;
         this.nodes.forEach(n => {
-            if (n.type === 'load') totalLoad += n.pLoad;
-            if (n.type === 'gen') totalGenCapacity += n.pGen;
+            if (n.type === 'load') {
+                // El (|| 0) evita errores si pLoad no está definido
+                totalLoad += (n.pLoad || 0);
+            }
         });
-        const systemStress = Math.min(1.5, totalLoad / Math.max(1, totalGenCapacity));
+
+        // 2. Calcular CAPACIDAD DISPONIBLE (Suma de generadores)
+        let totalCapacity = 0;
         this.nodes.forEach(n => {
             if (n.type === 'gen') {
-                n.currentGen = n.pGen * systemStress;
-                n.netPower = n.currentGen;
-            } else {
-                n.netPower = -n.pLoad;
+                totalCapacity += (n.pGen || 0);
             }
-            n.vVirtual = 1.0 + (n.netPower / 2000);
         });
+
+        // 3. CÁLCULO INTELIGENTE (Oferta vs Demanda)
+        const requiredGen = totalLoad * 1.05; // +5% margen de pérdidas
+        
+        // Evitamos división por cero usando Math.max(1, ...)
+        let utilizationFactor = requiredGen / Math.max(1, totalCapacity);
+        
+        // Límite físico: no se puede dar más del 100%
+        utilizationFactor = Math.min(1.0, utilizationFactor);
+
+        // =========================================================
+        // 🔥 ARRANQUE SUAVE (SOFT START) - CLAVE PARA QUE NO FALLE
+        // =========================================================
+        // Si la simulación lleva menos de 2 segundos, forzamos
+        // a que los generadores trabajen solo al 10% de lo calculado.
+        // Esto evita el "latigazo" inicial que rompe las líneas.
+        if (this.currentTime < 2.0) {
+            utilizationFactor = utilizationFactor * 0.1;
+        }
+
+        // 4. APLICAR A LOS NODOS
+        this.nodes.forEach(n => {
+            if (n.type === 'gen') {
+                // El generador produce según el factor calculado
+                n.currentGen = (n.pGen || 0) * utilizationFactor;
+                n.netPower = n.currentGen; 
+            } else {
+                // La carga consume lo que pide
+                n.netPower = -(n.pLoad || 0); 
+            }
+
+            // Voltaje Virtual (simplificado para estabilidad)
+            // Divide entre 5000 para que el cambio de voltaje sea suave
+            n.vVirtual = 1.0 + (n.netPower / 5000); 
+        });
+
+        // 5. CALCULAR FLUJO EN LÍNEAS
         this.lines.forEach(line => {
             if (!line.status) {
                 line.currentLoadMva = 0;
                 return;
             }
+            
+            // Flujo basado en diferencia de voltaje virtual
             const vDiff = line.from.vVirtual - line.to.vVirtual;
-            const flow = (vDiff / line.impedance) * 10;
-            const loadPull = line.to.type === 'load' ? line.to.pLoad : 0;
-            line.currentLoadMva = Math.abs(flow) + (loadPull * 0.4);
+            
+            // Protección contra impedancia cero o nula
+            const imp = Math.max(0.001, line.impedance || 0.01);
+            
+            const flow = (vDiff / imp) * 10;
+            
+            // Efecto de carga local ("jalón" del destino)
+            // Verificamos que el destino sea carga para acceder a pLoad
+            let loadPull = 0;
+            if (line.to.type === 'load') {
+                loadPull = (line.to.pLoad || 0) * 0.1;
+            }
+            
+            line.currentLoadMva = Math.abs(flow) + loadPull;
         });
-        this.updateUI(totalLoad, totalGenCapacity, systemStress);
-    }
 
+        // 6. Actualizar Interfaz (UI)
+        const systemStress = totalLoad / Math.max(1, totalCapacity);
+        
+        // Verificamos que updateUI exista antes de llamarlo
+        if (this.updateUI) {
+            this.updateUI(totalLoad, totalCapacity, systemStress);
+        }
+    }
     triggerPeakLoad() {
         this.nodes.forEach(n => { if (n.type === 'load') { n.pLoad *= 1.2; n.radius += 3; } });
         this.logger.log('ALERTA: Pico de demanda (+20%)', 'warn');
