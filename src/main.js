@@ -86,10 +86,68 @@ const init = async () => {
     const sidebar = new SidebarUI(simulation);
     sidebar.setControls(controls);
     sidebar.init();
+    // 3. Agregar Event Listener al contenedor (Delegación de eventos)
+    // El contenedor es linesStatus (div id="lines-status") [cite: 1263]
+    const linesStatusDiv = document.getElementById('lines-status');
+
+    if (linesStatusDiv) {
+        linesStatusDiv.addEventListener('click', (e) => {
+            // Utilizamos 'closest' para encontrar el botón padre (.critical-line-button)
+            const button = e.target.closest('.critical-line-button');
+            
+            if (button) {
+                const lineId = button.dataset.lineId;
+                if (lineId) {
+                    zoomToLine(lineId);
+                }
+            }
+        });
+    }
 
     // 4. Iniciar Lógica
     simulation.resetGrid(generatorData, loadData, relationData); 
     controls.initListeners();
+
+     const findLineById = (lineId) => {
+        return simulation.lines.find(l => l.id === lineId);
+    };
+
+    const zoomToLine = (lineId) => {
+        const line = findLineById(lineId);
+        if (!line) {
+            console.warn(`Línea no encontrada: ${lineId}`);
+            return;
+        }
+
+        // Calcular punto medio de la línea
+        const midX = (line.from.x + line.to.x) / 2;
+        const midY = (line.from.y + line.to.y) / 2;
+        
+        // Verificar que las coordenadas sean válidas
+        if (isNaN(midX) || isNaN(midY)) {
+            console.error("Error: Coordenadas de línea no numéricas.");
+            return;
+        }
+
+        // Centrar cámara en la línea con zoom
+        camera.centerOnWorld(midX, midY, 5.0); 
+        
+        logger.log(`Zoom a línea crítica: ${lineId}`, 'info');
+    };
+
+    // --- CÓDIGO AGREGADO: Event delegation para botones de líneas críticas ---
+    // Usamos event delegation porque los botones se crean dinámicamente
+    document.addEventListener('click', (e) => {
+        // Verificar si el click fue en un botón de línea crítica
+        const button = e.target.closest('.critical-line-button');
+        
+        if (button) {
+            const lineId = button.getAttribute('data-line-id');
+            if (lineId) {
+                zoomToLine(lineId);
+            }
+        }
+    });
 
     // --- CÓDIGO AGREGADO: Lógica del Botón Reiniciar ---
     const btnRestart = document.getElementById('btn-restart');

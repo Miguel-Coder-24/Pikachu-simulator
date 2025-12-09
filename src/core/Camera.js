@@ -9,6 +9,8 @@ export class Camera {
         // Configuración inicial para centrar Colombia aprox
         this.width = canvasWidth;
         this.height = canvasHeight;
+
+        
     }
 
     // Convierte coordenada de Pantalla (Mouse) a Mundo (Simulación)
@@ -37,7 +39,7 @@ export class Camera {
         else this.zoom *= (1 - zoomIntensity);
 
         // Limites de zoom
-        this.zoom = Math.max(0.5, Math.min(this.zoom, 10));
+        this.zoom = Math.max(0.2, Math.min(this.zoom, 10));
 
         // Ajustar Pan (x,y) para hacer zoom hacia donde está el mouse
         this.x = mouseX - (mouseX - this.x) * (this.zoom / oldZoom);
@@ -49,4 +51,15 @@ export class Camera {
         this.x += dx;
         this.y += dy;
     }
+
+    centerOnWorld(worldX, worldY, newZoom = 5.0) {
+    // 1. Establecer nuevo nivel de zoom
+    this.zoom = Math.max(0.2, Math.min(newZoom, 10));
+    
+    // 2. Calcular nuevo desplazamiento para centrar el punto
+    this.x = (this.width / 2) - (worldX * this.zoom);
+    this.y = (this.height / 2) - (worldY * this.zoom);
+    
+    console.log(`Cámara centrada en (${worldX}, ${worldY}) con zoom ${this.zoom}`);
+}
 }

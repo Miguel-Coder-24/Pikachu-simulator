@@ -57,43 +57,62 @@ export class Interactions {
     }
 
     onMouseDown(e) {
-        const worldPos = this.getMouseWorldPos(e);
+        // 1. Obtener la posición del ratón en coordenadas de PANTALLA
+        const rect = this.canvas.getBoundingClientRect();
+        const screenX = e.clientX - rect.left;
+        const screenY = e.clientY - rect.top;
 
-        if (e.button === 2 || e.button === 1) {
-            this.isPanning = true;
-            this.lastMouse = { x: e.clientX, y: e.clientY };
-            this.canvas.style.cursor = 'grabbing';
-            return;
-        }
+        // 2. Obtener la posición del ratón en coordenadas del MUNDO
+        const worldPos = this.camera.screenToWorld(screenX, screenY);
 
-        if (this.mode === 'cut') {
-            const line = this.findLineAt(worldPos);
-            if (line) {
-                this.simulation.cutLine(line);
-                // Opcional: Si quieres que siga cortando, quita la siguiente línea
-                // this.setMode('normal'); 
+        if (e.button === 0) { // Clic Izquierdo
+
+            // A. Lógica de selección de nodo (el arrastre de nodo está DESHABILITADO)
+            this.selectedNode = this.findNodeAt(worldPos);
+
+            if (this.selectedNode) {
+                // El nodo está seleccionado, pero no se inicia isDraggingNode
+                // Por lo tanto, el control pasa al pan
             }
-            return;
-        }
 
-        const node = this.findNodeAt(worldPos);
-        if (node) {
-            this.dragNode = node;
-            node.dragging = true;
-            this.canvas.style.cursor = 'grabbing';
+            // B. Iniciar el Panning con el clic izquierdo
+            this.isPanning = true;
+            
+            // Almacenar la posición de PANTALLA para el cálculo correcto del movimiento
+            this.lastScreenX = screenX; 
+            this.lastScreenY = screenY;
+        }
+        
+        // Evitar que el menú contextual aparezca con el botón derecho (si aplica)
+        if (e.button === 2) { 
+            e.preventDefault();
         }
     }
 
     onMouseMove(e) {
+        // 1. Obtener la posición actual del ratón en coordenadas de PANTALLA
+        const rect = this.canvas.getBoundingClientRect();
+        const screenX = e.clientX - rect.left;
+        const screenY = e.clientY - rect.top;
+
+        // 2. Lógica de Panning (Movimiento de la Cámara)
         if (this.isPanning) {
-            const dx = e.clientX - this.lastMouse.x;
-            const dy = e.clientY - this.lastMouse.y;
-            this.camera.handlePan(dx, dy);
-            this.lastMouse = { x: e.clientX, y: e.clientY };
-            return;
+            
+            // Calcular la diferencia de movimiento en píxeles de PANTALLA
+            const dx_screen = screenX - this.lastScreenX;
+            const dy_screen = screenY - this.lastScreenY;
+
+            // Mover la cámara usando el desplazamiento de pantalla
+            this.camera.handlePan(dx_screen, dy_screen);
+
+            // Actualizar la última posición de PANTALLA para el siguiente frame
+            this.lastScreenX = screenX;
+            this.lastScreenY = screenY;
+
         }
 
         const worldPos = this.getMouseWorldPos(e);
+        this.hoverNode = this.findNodeAt(worldPos);
 
         if (this.dragNode) {
             this.dragNode.x = worldPos.x;

@@ -1,14 +1,7 @@
 --- INICIO DEL PROYECTO ---
 
-Fecha de generación: 12/7/2025, 12:18:54 PM
+Fecha de generación: 7/12/2025, 6:15:27 p. m.
 Total archivos: 17
-
-
-============================================================
-ARCHIVO: README.md
-============================================================
-# Pikachu simulator
-
 
 
 ============================================================
@@ -37,7 +30,6 @@ ARCHIVO: index.html
             <div id="status-overlay">
                 Sistema estable<br>
                 Zoom automático.<br>
-                Arrastra nodos para reorganizar.
             </div>
         </div>
 
@@ -75,7 +67,14 @@ ARCHIVO: index.html
 
 
 ============================================================
-ARCHIVO: src/config.js
+ARCHIVO: README.md
+============================================================
+# Pikachu simulator
+
+
+
+============================================================
+ARCHIVO: src\config.js
 ============================================================
 export const CONFIG = {
     // Metadatos
@@ -122,7 +121,7 @@ export const CONFIG = {
 
 
 ============================================================
-ARCHIVO: src/core/AssetLoader.js
+ARCHIVO: src\core\AssetLoader.js
 ============================================================
 // src/core/AssetLoader.js
 
@@ -174,7 +173,7 @@ export class AssetLoader {
 
 
 ============================================================
-ARCHIVO: src/core/Camera.js
+ARCHIVO: src\core\Camera.js
 ============================================================
 // src/core/Camera.js
 
@@ -187,6 +186,8 @@ export class Camera {
         // Configuración inicial para centrar Colombia aprox
         this.width = canvasWidth;
         this.height = canvasHeight;
+
+        
     }
 
     // Convierte coordenada de Pantalla (Mouse) a Mundo (Simulación)
@@ -215,7 +216,7 @@ export class Camera {
         else this.zoom *= (1 - zoomIntensity);
 
         // Limites de zoom
-        this.zoom = Math.max(0.5, Math.min(this.zoom, 10));
+        this.zoom = Math.max(0.2, Math.min(this.zoom, 10));
 
         // Ajustar Pan (x,y) para hacer zoom hacia donde está el mouse
         this.x = mouseX - (mouseX - this.x) * (this.zoom / oldZoom);
@@ -227,11 +228,24 @@ export class Camera {
         this.x += dx;
         this.y += dy;
     }
+
+    centerOnWorld(worldX, worldY, newZoom = 5.0) {
+        // 1. Establece el nuevo nivel de zoom (con límites)
+        const viewWidth = this.width || 800; 
+        const viewHeight = this.height || 600;
+        this.zoom = Math.max(0.2, Math.min(newZoom, 10));
+        
+        // 2. Calcula el nuevo desplazamiento (pan) para que 
+        //    el punto (worldX, worldY) quede en el centro de la pantalla.
+        // Fórmula: PanX = (AnchoPantalla / 2) - (WorldX * Zoom)
+        this.x = (this.width / 2) - (worldX * this.zoom);
+        this.y = (this.height / 2) - (worldY * this.zoom);
+    }
 }
 
 
 ============================================================
-ARCHIVO: src/core/GameLoop.js
+ARCHIVO: src\core\GameLoop.js
 ============================================================
 export class GameLoop {
     constructor(updateCallback) {
@@ -270,7 +284,7 @@ export class GameLoop {
 
 
 ============================================================
-ARCHIVO: src/core/PowerGridSimulation.js
+ARCHIVO: src\core\PowerGridSimulation.js
 ============================================================
 import { PowerNode } from './PowerNode.js';
 import { TransmissionLine } from './TransmissionLine.js';
@@ -579,13 +593,35 @@ export class PowerGridSimulation {
         }
         if (this.ui.linesStatus) {
             const critical = this.lines.filter(l => l.status && l.currentLoadMva > 0).sort((a, b) => (b.currentLoadMva / b.capacityMva) - (a.currentLoadMva / a.capacityMva)).slice(0, 5);
-            let html = '<table style="width:100%; font-size:0.75rem;">';
+            let html = '';
             critical.forEach(l => {
                 const pct = ((l.currentLoadMva / l.capacityMva) * 100).toFixed(0);
                 const color = pct > 90 ? '#ff5252' : '#4CAF50';
-                html += `<tr style="color:${color}"><td>${l.id}</td><td>${pct}%</td></tr>`;
+                html += `<div class="critical-line-button" 
+                           data-line-id="${l.id}" 
+                           style="background-color: #1a1a1a; 
+                                  border: 1px solid ${color};
+                                  color: ${color};
+                                  cursor: pointer; 
+                                  margin-bottom: 4px; 
+                                  padding: 6px 10px; 
+                                  border-radius: 4px; 
+                                  display: flex; 
+                                  justify-content: space-between; 
+                                  font-size: 0.85rem;
+                                  transition: 0.1s ease-in-out;"
+                            onmouseover="this.style.filter='brightness(1.5)'"
+                            onmouseout="this.style.filter='none'">
+                            
+                            <span style="font-weight: bold; 
+                                         max-width: 65%; 
+                                         white-space: nowrap; 
+                                         overflow: hidden; 
+                                         text-overflow: ellipsis;">${l.id}</span>
+                            
+                            <span>${pct}%</span>
+                        </div>`;
             });
-            html += '</table>';
             this.ui.linesStatus.innerHTML = html;
         }
         if (this.ui.overlay) this.ui.overlay.textContent = stress > 1 ? 'Alerta: Sobrecarga detectada' : 'Sistema estable';
@@ -594,7 +630,7 @@ export class PowerGridSimulation {
 
 
 ============================================================
-ARCHIVO: src/core/PowerNode.js
+ARCHIVO: src\core\PowerNode.js
 ============================================================
 export class PowerNode {
     constructor(id, name, type, x, y) {
@@ -665,7 +701,7 @@ export class PowerNode {
         // Define a partir de cuánto zoom aparece el texto.
         // 0.8 = Tienes que acercarte un poco.
         // 1.5 = Tienes que acercarte mucho.
-        const umbralZoom = (this.type === 'gen') ? 0.7 : 1.2; // Generadores se ven desde más lejos
+        const umbralZoom = (this.type === 'gen') ? 0.7 : 3.0; // Generadores se ven desde más lejos
 
         if (zoom > umbralZoom) {
             ctx.fillStyle = '#FFFFFF';
@@ -683,7 +719,7 @@ export class PowerNode {
 
 
 ============================================================
-ARCHIVO: src/core/TransmissionLine.js
+ARCHIVO: src\core\TransmissionLine.js
 ============================================================
 export class TransmissionLine {
     constructor(id, fromNode, toNode, capacity = 350) {
@@ -783,7 +819,7 @@ export class TransmissionLine {
 
 
 ============================================================
-ARCHIVO: src/data/colombia_outline.js
+ARCHIVO: src\data\colombia_outline.js
 ============================================================
 // src/data/colombia_outline.js
 
@@ -826,7 +862,7 @@ export const COLOMBIA_OUTLINE = [
 
 
 ============================================================
-ARCHIVO: src/data/datos_json_unificados.json
+ARCHIVO: src\data\datos_json_unificados.json
 ============================================================
 {
   "Proyectos": [
@@ -5213,7 +5249,7 @@ ARCHIVO: src/data/datos_json_unificados.json
 
 
 ============================================================
-ARCHIVO: src/main.js
+ARCHIVO: src\main.js
 ============================================================
 // src/main.js
 
@@ -5304,6 +5340,51 @@ const init = async () => {
     sidebar.setControls(controls);
     sidebar.init();
 
+    const findLineById = (lineId) => {
+        // La simulación mantiene la lista de líneas activas [cite: 1529, 1535]
+        return simulation.lines.find(l => l.id === lineId);
+    };
+
+    /** Calcula el punto medio de la línea y centra la cámara en él. */
+    const zoomToLine = (lineId) => {
+        const line = findLineById(lineId);
+        if (!line) {
+            console.warn(`Línea no encontrada: ${lineId}`);
+            return;
+        }
+
+        // 1. Calcular el punto medio (coordenadas del mundo)
+        // Esto asume que line.from y line.to son objetos Node que tienen 'x' e 'y' numéricos.
+        const midX = (line.from.x + line.to.x) / 2;
+        const midY = (line.from.y + line.to.y) / 2;
+        
+        // 🔑 VERIFICACIÓN CRÍTICA: Si el zoom sigue fallando, es probable que midX/midY sean NaN o nulos.
+        if (isNaN(midX) || isNaN(midY)) {
+             console.error("Error: Coordenadas de línea no numéricas. Revisa que 'line.from.x' y 'line.to.x' sean números válidos.");
+             return;
+        }
+
+        // 2. Mover la cámara al punto medio con un zoom de 5x
+        camera.centerOnWorld(midX, midY, 5.0); 
+        
+        logger.log(`Zoom a línea crítica: ${lineId}`, 'info'); // Opcional
+    };
+
+
+    // 3. Agregar Event Listener al contenedor (Delegación de eventos)
+    // El contenedor es linesStatus (div id="lines-status") [cite: 1263]
+    linesStatus.addEventListener('click', (e) => {
+        // Busca el elemento padre más cercano con la clase .critical-line-button
+        const button = e.target.closest('.critical-line-button');
+        
+        if (button) {
+            const lineId = button.getAttribute('data-line-id');
+            if (lineId) {
+                zoomToLine(lineId);
+            }
+        }
+    });
+
     // 4. Iniciar Lógica
     simulation.resetGrid(generatorData, loadData, relationData); 
     controls.initListeners();
@@ -5350,7 +5431,7 @@ window.addEventListener('DOMContentLoaded', init);
 
 
 ============================================================
-ARCHIVO: src/ui/CanvasRenderer.js
+ARCHIVO: src\ui\CanvasRenderer.js
 ============================================================
 import { CONFIG } from '../config.js';
 // Importamos el contorno simple como respaldo por si falla el GeoJSON
@@ -5521,7 +5602,9 @@ export class CanvasRenderer {
     }
 
     drawNodes(nodes) {
-        const invScale = 1 / this.camera.zoom;
+        // Obtenemos el zoom actual para usarlo en la lógica
+        const currentZoom = this.camera.zoom;
+        const invScale = 1 / currentZoom;
         const iconSize = 32; 
 
         nodes.forEach(node => {
@@ -5532,6 +5615,8 @@ export class CanvasRenderer {
 
             this.ctx.save();
             this.ctx.translate(node.x, node.y);
+            
+            // Mantiene el icono del mismo tamaño sin importar el zoom
             this.ctx.scale(invScale, invScale);
 
             if (isGen) {
@@ -5543,12 +5628,24 @@ export class CanvasRenderer {
             this.ctx.shadowColor = node.glowColor;
             this.ctx.drawImage(img, -iconSize/2, -iconSize/2, iconSize, iconSize);
 
-            this.ctx.font = 'bold 12px Consolas';
-            this.ctx.fillStyle = '#fff';
-            this.ctx.textAlign = 'center';
-            this.ctx.shadowBlur = 4;
-            this.ctx.shadowColor = '#000';
-            this.ctx.fillText(node.name, 0, iconSize/2 + 12);
+            // --- INICIO DE LA MODIFICACIÓN ---
+            
+            // Definimos cuándo debe aparecer el texto
+            // Si es 'gen', aparece casi siempre (0.5)
+            // Si es municipio/carga, solo aparece si el zoom es mayor a 2.5 (tienes que acercarte)
+            const umbralTexto = isGen ? 0.5 : 6.0;
+
+            if (currentZoom > umbralTexto) {
+                this.ctx.font = 'bold 12px Consolas';
+                this.ctx.fillStyle = '#fff';
+                this.ctx.textAlign = 'center';
+                this.ctx.shadowBlur = 4;
+                this.ctx.shadowColor = '#000';
+                
+                // Dibujamos el texto
+                this.ctx.fillText(node.name, 0, iconSize/2 + 12);
+            }
+            // --- FIN DE LA MODIFICACIÓN ---
 
             this.ctx.restore();
         });
@@ -5574,7 +5671,98 @@ export class CanvasRenderer {
 
 
 ============================================================
-ARCHIVO: src/ui/Interactions.js
+ARCHIVO: src\ui\hud\Console.js
+============================================================
+// src/ui/hud/Console.js
+
+export class LogConsole {
+    constructor(containerElement) {
+        this.container = containerElement;
+    }
+
+    log(message, type = 'info') {
+        if (!this.container) return;
+
+        const entry = document.createElement('div');
+        entry.classList.add('log-entry', type);
+        
+        // Obtener hora actual
+        const time = new Date().toLocaleTimeString('es-CO', { hour12: false });
+        
+        // Icono según tipo
+        let icon = 'ℹ️';
+        if (type === 'warn') icon = '⚠️';
+        if (type === 'error') icon = '🔥';
+        if (type === 'success') icon = '✅';
+
+        entry.innerHTML = `<span class="log-time">[${time}]</span> ${icon} ${message}`;
+        
+        this.container.appendChild(entry);
+        
+        // Auto-scroll hacia abajo
+        this.container.scrollTop = this.container.scrollHeight;
+    }
+}
+
+
+============================================================
+ARCHIVO: src\ui\hud\Sidebar.js
+============================================================
+// src/ui/hud/Sidebar.js
+
+export class SidebarUI {
+    constructor(simulation) {
+        this.simulation = simulation;
+        this.controls = null;
+        
+        this.btnPeak = document.getElementById('btn-peak');
+        this.btnTrip = document.getElementById('btn-trip');
+        this.btnReset = document.getElementById('btn-reset');
+        
+        // 1. Referencia al nuevo botón
+        this.btnCut = document.getElementById('btn-cut'); 
+    }
+
+    setControls(controls) {
+        this.controls = controls;
+    }
+
+    init() {
+        if (this.btnPeak) {
+            this.btnPeak.addEventListener('click', () => this.simulation.triggerPeakLoad());
+        }
+
+        if (this.btnTrip) {
+            this.btnTrip.addEventListener('click', () => this.simulation.tripRandomLine());
+        }
+
+        if (this.btnReset) {
+            this.btnReset.addEventListener('click', () => this.simulation.resetGrid());
+        }
+
+        // 2. Lógica de la Tijera
+        if (this.btnCut) {
+            this.btnCut.addEventListener('click', () => {
+                if (!this.controls) return;
+
+                // Alternar entre modo 'cut' y 'normal'
+                if (this.controls.mode === 'normal') {
+                    this.controls.setMode('cut');
+                    this.btnCut.textContent = 'Cancelar Corte (Esc)';
+                    this.btnCut.classList.add('active');
+                } else {
+                    this.controls.setMode('normal');
+                    this.btnCut.textContent = '✂️ Cortar Línea (Manual)';
+                    this.btnCut.classList.remove('active');
+                }
+            });
+        }
+    }
+}
+
+
+============================================================
+ARCHIVO: src\ui\Interactions.js
 ============================================================
 // src/ui/Interactions.js
 
@@ -5635,43 +5823,62 @@ export class Interactions {
     }
 
     onMouseDown(e) {
-        const worldPos = this.getMouseWorldPos(e);
+        // 1. Obtener la posición del ratón en coordenadas de PANTALLA
+        const rect = this.canvas.getBoundingClientRect();
+        const screenX = e.clientX - rect.left;
+        const screenY = e.clientY - rect.top;
 
-        if (e.button === 2 || e.button === 1) {
-            this.isPanning = true;
-            this.lastMouse = { x: e.clientX, y: e.clientY };
-            this.canvas.style.cursor = 'grabbing';
-            return;
-        }
+        // 2. Obtener la posición del ratón en coordenadas del MUNDO
+        const worldPos = this.camera.screenToWorld(screenX, screenY);
 
-        if (this.mode === 'cut') {
-            const line = this.findLineAt(worldPos);
-            if (line) {
-                this.simulation.cutLine(line);
-                // Opcional: Si quieres que siga cortando, quita la siguiente línea
-                // this.setMode('normal'); 
+        if (e.button === 0) { // Clic Izquierdo
+
+            // A. Lógica de selección de nodo (el arrastre de nodo está DESHABILITADO)
+            this.selectedNode = this.findNodeAt(worldPos);
+
+            if (this.selectedNode) {
+                // El nodo está seleccionado, pero no se inicia isDraggingNode
+                // Por lo tanto, el control pasa al pan
             }
-            return;
-        }
 
-        const node = this.findNodeAt(worldPos);
-        if (node) {
-            this.dragNode = node;
-            node.dragging = true;
-            this.canvas.style.cursor = 'grabbing';
+            // B. Iniciar el Panning con el clic izquierdo
+            this.isPanning = true;
+            
+            // Almacenar la posición de PANTALLA para el cálculo correcto del movimiento
+            this.lastScreenX = screenX; 
+            this.lastScreenY = screenY;
+        }
+        
+        // Evitar que el menú contextual aparezca con el botón derecho (si aplica)
+        if (e.button === 2) { 
+            e.preventDefault();
         }
     }
 
     onMouseMove(e) {
+        // 1. Obtener la posición actual del ratón en coordenadas de PANTALLA
+        const rect = this.canvas.getBoundingClientRect();
+        const screenX = e.clientX - rect.left;
+        const screenY = e.clientY - rect.top;
+
+        // 2. Lógica de Panning (Movimiento de la Cámara)
         if (this.isPanning) {
-            const dx = e.clientX - this.lastMouse.x;
-            const dy = e.clientY - this.lastMouse.y;
-            this.camera.handlePan(dx, dy);
-            this.lastMouse = { x: e.clientX, y: e.clientY };
-            return;
+            
+            // Calcular la diferencia de movimiento en píxeles de PANTALLA
+            const dx_screen = screenX - this.lastScreenX;
+            const dy_screen = screenY - this.lastScreenY;
+
+            // Mover la cámara usando el desplazamiento de pantalla
+            this.camera.handlePan(dx_screen, dy_screen);
+
+            // Actualizar la última posición de PANTALLA para el siguiente frame
+            this.lastScreenX = screenX;
+            this.lastScreenY = screenY;
+
         }
 
         const worldPos = this.getMouseWorldPos(e);
+        this.hoverNode = this.findNodeAt(worldPos);
 
         if (this.dragNode) {
             this.dragNode.x = worldPos.x;
@@ -5756,98 +5963,7 @@ export class Interactions {
 
 
 ============================================================
-ARCHIVO: src/ui/hud/Console.js
-============================================================
-// src/ui/hud/Console.js
-
-export class LogConsole {
-    constructor(containerElement) {
-        this.container = containerElement;
-    }
-
-    log(message, type = 'info') {
-        if (!this.container) return;
-
-        const entry = document.createElement('div');
-        entry.classList.add('log-entry', type);
-        
-        // Obtener hora actual
-        const time = new Date().toLocaleTimeString('es-CO', { hour12: false });
-        
-        // Icono según tipo
-        let icon = 'ℹ️';
-        if (type === 'warn') icon = '⚠️';
-        if (type === 'error') icon = '🔥';
-        if (type === 'success') icon = '✅';
-
-        entry.innerHTML = `<span class="log-time">[${time}]</span> ${icon} ${message}`;
-        
-        this.container.appendChild(entry);
-        
-        // Auto-scroll hacia abajo
-        this.container.scrollTop = this.container.scrollHeight;
-    }
-}
-
-
-============================================================
-ARCHIVO: src/ui/hud/Sidebar.js
-============================================================
-// src/ui/hud/Sidebar.js
-
-export class SidebarUI {
-    constructor(simulation) {
-        this.simulation = simulation;
-        this.controls = null;
-        
-        this.btnPeak = document.getElementById('btn-peak');
-        this.btnTrip = document.getElementById('btn-trip');
-        this.btnReset = document.getElementById('btn-reset');
-        
-        // 1. Referencia al nuevo botón
-        this.btnCut = document.getElementById('btn-cut'); 
-    }
-
-    setControls(controls) {
-        this.controls = controls;
-    }
-
-    init() {
-        if (this.btnPeak) {
-            this.btnPeak.addEventListener('click', () => this.simulation.triggerPeakLoad());
-        }
-
-        if (this.btnTrip) {
-            this.btnTrip.addEventListener('click', () => this.simulation.tripRandomLine());
-        }
-
-        if (this.btnReset) {
-            this.btnReset.addEventListener('click', () => this.simulation.resetGrid());
-        }
-
-        // 2. Lógica de la Tijera
-        if (this.btnCut) {
-            this.btnCut.addEventListener('click', () => {
-                if (!this.controls) return;
-
-                // Alternar entre modo 'cut' y 'normal'
-                if (this.controls.mode === 'normal') {
-                    this.controls.setMode('cut');
-                    this.btnCut.textContent = 'Cancelar Corte (Esc)';
-                    this.btnCut.classList.add('active');
-                } else {
-                    this.controls.setMode('normal');
-                    this.btnCut.textContent = '✂️ Cortar Línea (Manual)';
-                    this.btnCut.classList.remove('active');
-                }
-            });
-        }
-    }
-}
-
-
-============================================================
-ARCHIVO: styles/main.css
+ARCHIVO: styles\main.css
 ============================================================
 /* styles/main.css */
 :root {

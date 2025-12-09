@@ -305,13 +305,35 @@ export class PowerGridSimulation {
         }
         if (this.ui.linesStatus) {
             const critical = this.lines.filter(l => l.status && l.currentLoadMva > 0).sort((a, b) => (b.currentLoadMva / b.capacityMva) - (a.currentLoadMva / a.capacityMva)).slice(0, 5);
-            let html = '<table style="width:100%; font-size:0.75rem;">';
+            let html = '';
             critical.forEach(l => {
                 const pct = ((l.currentLoadMva / l.capacityMva) * 100).toFixed(0);
                 const color = pct > 90 ? '#ff5252' : '#4CAF50';
-                html += `<tr style="color:${color}"><td>${l.id}</td><td>${pct}%</td></tr>`;
+                html += `<div class="critical-line-button" 
+                           data-line-id="${l.id}" 
+                           style="background-color: #1a1a1a; 
+                                  border: 1px solid ${color};
+                                  color: ${color};
+                                  cursor: pointer; 
+                                  margin-bottom: 4px; 
+                                  padding: 6px 10px; 
+                                  border-radius: 4px; 
+                                  display: flex; 
+                                  justify-content: space-between; 
+                                  font-size: 0.85rem;
+                                  transition: 0.1s ease-in-out;"
+                            onmouseover="this.style.filter='brightness(1.5)'"
+                            onmouseout="this.style.filter='none'">
+                            
+                            <span style="font-weight: bold; 
+                                         max-width: 65%; 
+                                         white-space: nowrap; 
+                                         overflow: hidden; 
+                                         text-overflow: ellipsis;">${l.id}</span>
+                            
+                            <span>${pct}%</span>
+                        </div>`;
             });
-            html += '</table>';
             this.ui.linesStatus.innerHTML = html;
         }
         if (this.ui.overlay) this.ui.overlay.textContent = stress > 1 ? 'Alerta: Sobrecarga detectada' : 'Sistema estable';
