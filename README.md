@@ -57,9 +57,9 @@ El objetivo es ofrecer una plataforma moderna, visual y altamente intuitiva para
    ```arduino
    http://localhost:8000
 
-🌩️ Objetivo del proyecto
+##🌩️ Objetivo del proyecto
 
 Crear un simulador visualmente atractivo y técnicamente sólido que permita explorar, entender y experimentar con el comportamiento dinámico de una red eléctrica real, combinando ingeniería, computación gráfica y diseño intuitivo.
 
-👨‍💻 Autores
+##👨‍💻 Autores
 Estudiantes de Ingeniería y Ciencias de la Universidad Nacional de Colombia
