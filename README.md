@@ -20,7 +20,6 @@ Crear un simulador visualmente atractivo y técnicamente sólido que permita exp
 - **Interfaz estilo SCADA/Control Room**, moderna y responsiva.
 - **Cámara dinámica** con zoom, paneo y navegación fluida.
 - **Interacción total**:
-  - Arrastrar nodos.
   - Cortar líneas manualmente.
   - Falla aleatoria.
   - Simular picos nacionales de demanda.
@@ -66,4 +65,6 @@ Crear un simulador visualmente atractivo y técnicamente sólido que permita exp
 - [Documentación](docs/Documentación.pdf)
 ---
 ## 👨‍💻 Autores
-Estudiantes de Ingeniería y Ciencias de la Universidad Nacional de Colombia
+- Miguel Ortegón
+- Nicolas Fuentes
+- Johan Barajas
