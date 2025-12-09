@@ -61,7 +61,7 @@ Crear un simulador visualmente atractivo y técnicamente sólido que permita exp
    http://localhost:8000
 
 ---
-## Documentación
+## 📜 Documentación
 - [Presentación](docs/Presentación.pdf)
 - [Documentación](docs/Documentación.pdf)
 ---
