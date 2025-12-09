@@ -62,8 +62,8 @@ Crear un simulador visualmente atractivo y técnicamente sólido que permita exp
 
 ---
 ## Documentación
-[Presentación)(docs/)
-[Documentación]()
+[Presentación)(docs/Proyecto Pikachu.pdf)
+[Documentación](docs/Documentación Técnica.pdf)
 ---
 ## 👨‍💻 Autores
 Estudiantes de Ingeniería y Ciencias de la Universidad Nacional de Colombia
