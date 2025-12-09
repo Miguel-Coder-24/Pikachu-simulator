@@ -6,7 +6,10 @@ Combina visualización avanzada, física simplificada de flujos eléctricos, fal
 El objetivo es ofrecer una plataforma moderna, visual y altamente intuitiva para explorar conceptos de ingeniería eléctrica, análisis de redes y operación del sistema.
 
 ---
+## 🌩️ Objetivo del proyecto
 
+Crear un simulador visualmente atractivo y técnicamente sólido que permita explorar, entender y experimentar con el comportamiento dinámico de una red eléctrica real, combinando ingeniería, computación gráfica y diseño intuitivo.
+---
 ## 🚀 Características Principales
 
 - **Mapa georreferenciado de Colombia** (GeoJSON de alta precisión).
@@ -58,10 +61,9 @@ El objetivo es ofrecer una plataforma moderna, visual y altamente intuitiva para
    http://localhost:8000
 
 ---
-
-## 🌩️ Objetivo del proyecto
-
-Crear un simulador visualmente atractivo y técnicamente sólido que permita explorar, entender y experimentar con el comportamiento dinámico de una red eléctrica real, combinando ingeniería, computación gráfica y diseño intuitivo.
-
+## Documentación
+[Presentación)(docs/)
+[Documentación]()
+---
 ## 👨‍💻 Autores
 Estudiantes de Ingeniería y Ciencias de la Universidad Nacional de Colombia
