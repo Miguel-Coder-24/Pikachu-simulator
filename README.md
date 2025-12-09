@@ -62,7 +62,7 @@ Crear un simulador visualmente atractivo y técnicamente sólido que permita exp
 
 ---
 ## Documentación
-- [Presentación)(docs/Presentación.pdf)
+- [Presentación](docs/Presentación.pdf)
 - [Documentación](docs/Documentación.pdf)
 ---
 ## 👨‍💻 Autores
