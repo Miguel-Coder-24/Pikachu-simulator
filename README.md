@@ -50,3 +50,10 @@ El objetivo es ofrecer una plataforma moderna, visual y altamente intuitiva para
 1. Clona el repositorio:
    ```bash
    git clone https://github.com/Miguel-Coder-24/Pikachu-simulator
+2. Abre un servidor local (recomendado):
+   ```bash
+   python3 -m http.server 8000
+3. Entra a:
+   ```arduino
+   http://localhost:8000
+
