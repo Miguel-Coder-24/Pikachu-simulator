@@ -29,9 +29,7 @@ Crear un simulador visualmente atractivo y técnicamente sólido que permita exp
 
 ## 🎮 Controles
 
-- **Clic izquierdo**: seleccionar y arrastrar nodos.  
-- **Clic derecho / rueda presionada**: panear el mapa.  
-- **Rueda del mouse**: zoom suave.  
+- **Clic izquierdo**: movimiento de camara  
 - **Botón ✂️**: cortar líneas manualmente.  
 - **Botones laterales**: pico de demanda, falla aleatoria, regenerar topología.
 
